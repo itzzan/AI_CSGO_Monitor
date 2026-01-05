@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@MapperScan("com.zan.csgo.mapper")
+@MapperScan("com.zan.csgo.core.mapper")
 public class AiCsgoMonitorApplication {
 
     public static void main(String[] args) {

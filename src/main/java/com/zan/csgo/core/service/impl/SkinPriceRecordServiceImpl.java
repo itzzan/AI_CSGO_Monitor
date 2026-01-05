@@ -3,7 +3,7 @@ package com.zan.csgo.core.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zan.csgo.core.model.SkinPriceRecordEntity;
 import com.zan.csgo.core.service.ISkinPriceRecordService;
-import com.zan.csgo.mapper.SkinPriceRecordMapper;
+import com.zan.csgo.core.mapper.SkinPriceRecordMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 

@@ -7,7 +7,7 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zan.csgo.core.model.SkinInfoEntity;
 import com.zan.csgo.core.service.ISkinInfoService;
-import com.zan.csgo.mapper.SkinInfoMapper;
+import com.zan.csgo.core.mapper.SkinInfoMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
