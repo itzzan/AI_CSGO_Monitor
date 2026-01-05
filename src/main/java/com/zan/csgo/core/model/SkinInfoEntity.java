@@ -1,6 +1,7 @@
 package com.zan.csgo.core.model;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -89,12 +90,14 @@ public class SkinInfoEntity implements Serializable {
     @TableField("created_by")
     private Long createdBy;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("created_at")
     private Date createdAt;
 
     @TableField("changed_by")
     private Long changedBy;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(value = "changed_at")
     private Date changedAt;
 

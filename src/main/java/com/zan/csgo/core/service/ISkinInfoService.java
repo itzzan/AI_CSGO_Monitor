@@ -10,4 +10,6 @@ import com.zan.csgo.core.model.SkinInfoEntity;
  * @Description : 饰品基本信息Service
  */
 public interface ISkinInfoService extends IService<SkinInfoEntity> {
+
+    public boolean loadSkinInfoData(String jsonFilePath);
 }
