@@ -1,0 +1,27 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/csgo_monitor?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 12345678
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  #  打印SQL
+    map-underscore-to-camel-case: true  # 自动驼峰转换
+  global-config:
+    db-config:
+      logic-delete-field: delFlag  # 全局逻辑删除字段名
+      logic-delete-value: 1  # 逻辑已删除值
+      logic-not-delete-value: 0  # 逻辑未删除值
+      id-type: auto  # 主键生成策略
+  mapper-locations: classpath:mapper/**/*.xml
