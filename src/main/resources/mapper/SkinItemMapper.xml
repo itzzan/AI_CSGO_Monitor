@@ -8,12 +8,14 @@
         <result column="skin_item_id" property="skinItemId" />
         <result column="skin_market_hash_name" property="skinMarketHashName" />
         <result column="skin_name" property="skinName" />
+        <result column="skin_category" property="skinCategory" />
         <result column="skin_weapon" property="skinWeapon" />
+        <result column="skin_pattern" property="skinPattern" />
         <result column="skin_exterior" property="skinExterior" />
-        <result column="skin_rarity" property="skinRarity" />
         <result column="skin_image_url" property="skinImageUrl" />
         <result column="is_stattrak" property="isStattrak" />
         <result column="is_souvenir" property="isSouvenir" />
+        <result column="is_star" property="isStar" />
         <result column="version" property="version" />
         <result column="created_by" property="createdBy" />
         <result column="created_at" property="createdAt" />
@@ -24,8 +26,8 @@
 
     <!-- 通用查询结果列 -->
     <sql id="Base_Column_List">
-        id, skin_item_id, skin_market_hash_name, skin_name, skin_weapon,
-        skin_exterior, skin_rarity, skin_image_url, is_stattrak, is_souvenir,
+        id, skin_item_id, skin_market_hash_name, skin_name, skin_category, skin_weapon,
+        skin_pattern, skin_exterior, skin_rarity, skin_image_url, is_stattrak, is_souvenir, is_star
         version, created_by, created_at, changed_by, changed_at, del_flag
     </sql>
 

@@ -45,22 +45,28 @@ public class SkinItemEntity implements Serializable {
     private String skinName;
 
     /**
-     * 饰品类型（手套、匕首、步枪等）
+     * 饰品大类（手套、匕首、步枪等）
+     */
+    @TableField("skin_category")
+    private String skinCategory;
+
+    /**
+     * 饰品具体类型（AK47、M4A1）
      */
     @TableField("skin_weapon")
     private String skinWeapon;
+
+    /**
+     * 英文皮肤/图案名（Redline, Doppler, Vanilla）
+     */
+    @TableField("skin_pattern")
+    private String skinPattern;
 
     /**
      * 饰品磨损等级
      */
     @TableField("skin_exterior")
     private String skinExterior;
-
-    /**
-     * 饰品稀有度
-     */
-    @TableField("skin_rarity")
-    private String skinRarity;
 
     /**
      * 饰品图片URL
@@ -79,6 +85,12 @@ public class SkinItemEntity implements Serializable {
      */
     @TableField("is_souvenir")
     private Integer isSouvenir;
+
+    /**
+     * 饰品是否带星标(★)，通常为刀/手套，0-否，1-是
+     */
+    @TableField("is_star")
+    private Integer isStar;
 
     /**
      * 版本号

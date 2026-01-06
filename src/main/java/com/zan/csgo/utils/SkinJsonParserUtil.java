@@ -9,7 +9,10 @@ import com.zan.csgo.model.entity.SkinItemEntity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * @Author Zan
@@ -22,6 +25,12 @@ import java.util.List;
 public class SkinJsonParserUtil {
 
     public static final String JSON_FILE_PATH = "static/data.json";
+
+    // 预编译正则：匹配标准磨损等级 (严格匹配括号结尾)
+    private static final Pattern EXTERIOR_PATTERN = Pattern.compile("\\((Factory New|Minimal Wear|Field-Tested|Well-Worn|Battle-Scarred)\\)$");
+
+    // 预编译正则：匹配前缀 (StatTrak 或 Souvenir)
+    private static final Pattern PREFIX_PATTERN = Pattern.compile("^(StatTrak™|Souvenir)\\s+");
 
     /**
      * 解析JSON文件
@@ -59,135 +68,122 @@ public class SkinJsonParserUtil {
         SkinItemEntity skinItem = new SkinItemEntity();
         skinItem.setSkinItemId(Long.parseLong(jsonData.getItemId()));
         skinItem.setSkinMarketHashName(jsonData.getMarket_hash_name());
+
+        // 1. 中文名 (对应 skin_name)
         skinItem.setSkinName(jsonData.getName());
         skinItem.setSkinImageUrl(jsonData.getImage_url());
 
-        // 从市场哈希名称中解析更多信息
+        // 2. 核心解析：从 Hash Name 拆解出 Type, Pattern, Category, Rarity 等
         parseAdditionalInfo(skinItem, jsonData.getMarket_hash_name());
 
         return skinItem;
     }
 
     /**
-     * 从市场哈希名称中解析武器类型、磨损等级等信息
+     * 核心解析逻辑
      */
     private void parseAdditionalInfo(SkinItemEntity skinItem, String marketHashName) {
         if (StrUtil.isBlank(marketHashName)) {
             return;
         }
 
-        // 解析武器类型
-        String weapon = extractWeapon(marketHashName);
-        if (StrUtil.isNotBlank(weapon)) {
+        String tempName = marketHashName.trim();
+
+        // --- Step 1: 处理星标 (★) ---
+        if (tempName.startsWith("★")) {
+            skinItem.setIsStar(1);
+            tempName = tempName.replace("★", "").trim();
+        } else {
+            skinItem.setIsStar(0);
+        }
+
+        // --- Step 2: 处理前缀 (StatTrak / Souvenir) ---
+        Matcher prefixMatcher = PREFIX_PATTERN.matcher(tempName);
+        if (prefixMatcher.find()) {
+            String prefix = prefixMatcher.group(1);
+            if ("StatTrak™".equals(prefix)) skinItem.setIsStattrak(1);
+            if ("Souvenir".equals(prefix)) skinItem.setIsSouvenir(1);
+            // 移除前缀
+            tempName = prefixMatcher.replaceFirst("").trim();
+        }
+
+        // --- Step 3: 提取磨损 (Exterior) ---
+        Matcher extMatcher = EXTERIOR_PATTERN.matcher(tempName);
+        if (extMatcher.find()) {
+            skinItem.setSkinExterior(extMatcher.group(1));
+            // 移除磨损部分
+            tempName = extMatcher.replaceFirst("").trim();
+        }
+
+        // --- Step 4: 分割 Weapon 和 Pattern ---
+        // 此时 tempName 应该只剩下 "AK-47 | Redline" 或 "Butterfly Knife"
+        // 使用 " | " 进行分割
+        String[] parts = tempName.split("\\s\\|\\s");
+
+        if (parts.length >= 1) {
+            // 第一部分是武器/类型 (如 AK-47, Sticker, Charm)
+            String weapon = parts[0];
             skinItem.setSkinWeapon(weapon);
-        }
 
-        // 解析磨损等级
-        String exterior = extractExterior(marketHashName);
-        if (StrUtil.isNotBlank(exterior)) {
-            skinItem.setSkinExterior(exterior);
-        }
+            // 根据 Weapon 智能判断大类 (Category)
+            skinItem.setSkinCategory(determineCategory(weapon));
 
-        // 解析是否StatTrak
-        int isStatTrak = (marketHashName.contains("StatTrak™") ||
-                marketHashName.contains("StatTrak")) ? 1 : 0;
-        skinItem.setIsStattrak(isStatTrak);
-
-        // 解析是否纪念品
-        int isSouvenir = marketHashName.contains("Souvenir") ? 1 : 0;
-        skinItem.setIsSouvenir(isSouvenir);
-
-        // 解析稀有度（简化的逻辑，实际需要更复杂的解析）
-        String rarity = extractRarity(marketHashName);
-        if (StrUtil.isNotBlank(rarity)) {
-            skinItem.setSkinRarity(rarity);
+            // 第二部分及以后是 皮肤/图案名 (Pattern)
+            if (parts.length >= 2) {
+                // 处理多段式命名 (如: Souvenir Charm | Austin 2025 | Exploit)
+                // 将后面所有部分拼接起来作为 Pattern
+                String pattern = String.join(" | ", Arrays.copyOfRange(parts, 1, parts.length));
+                skinItem.setSkinPattern(pattern);
+            } else {
+                // 如果没有 "|"，说明是原版 (如 ★ Butterfly Knife)
+                skinItem.setSkinPattern("Vanilla");
+            }
         }
     }
 
-    private String extractWeapon(String marketHashName) {
-        // 常见的武器类型列表
-        String[] weapons = {
-                "AK-47", "M4A4", "M4A1-S", "AWP", "Desert Eagle", "USP-S", "Glock-18", "Dual Berettas",
-                "P250", "P2000", "Tec-9", "Five-SeveN", "CZ75-Auto", "P90", "PP-Bizon", "MP9", "MP7",
-                "UMP-45", "MAC-10", "Galil AR", "FAMAS", "SG 553", "AUG", "MP5-SD",
-                "SSG 08", "SCAR-20", "G3SG1", "MAG-7", "Nova", "XM1014", "Sawed-Off",
-                "M249", "Negev", "R8 Revolver", "Bayonet", "Karambit", "M9 Bayonet",
-                "Butterfly Knife", "Flip Knife", "Gut Knife", "Huntsman Knife",
-                "Falchion Knife", "Shadow Daggers", "Bowie Knife", "Navaja Knife",
-                "Stiletto Knife", "Talon Knife", "Ursus Knife", "Nomad Knife",
-                "Skeleton Knife", "Survival Knife", "Paracord Knife",
-                "Sport Gloves", "Driver Gloves", "Hand Wraps", "Moto Gloves",
-                "Specialist Gloves", "Bloodhound Gloves", "Hydra Gloves"
-        };
+    /**
+     * 根据具体类型归纳大类 (Category Group)
+     */
+    private String determineCategory(String weapon) {
+        String w = weapon.toLowerCase();
 
-        for (String weapon : weapons) {
-            if (marketHashName.contains(weapon)) {
-                return weapon;
-            }
-        }
-
-        // 如果没找到具体武器，尝试判断类型
-        if (marketHashName.contains("Music Kit")) {
-            return "Music Kit";
-        } else if (marketHashName.contains("Sticker")) {
-            return "Sticker";
-        } else if (marketHashName.contains("Gloves")) {
-            return "Gloves";
-        } else if (marketHashName.contains("Knife")) {
+        // 刀具类
+        if (w.contains("knife") || w.contains("bayonet") || w.contains("karambit") || w.contains("daggers")) {
             return "Knife";
-        } else if (marketHashName.contains("Graffiti")) {
-            return "Graffiti";
-        } else if (marketHashName.contains("Souvenir Charm")) {
-            return "Souvenir Charm";
-        } else if (marketHashName.contains("Key")) {
-            return "Key";
-        } else if (marketHashName.contains("Patch")) {
-            return "Patch";
-        } else if (marketHashName.contains("Capsule")) {
-            return "Capsule";
-        } else if (marketHashName.contains("Pin")) {
-            return "Pin";
-        } else if (marketHashName.contains("Charm")) {
-            return "Charm";
+        }
+        // 手套类
+        if (w.contains("gloves") || w.contains("wraps")) {
+            return "Gloves";
+        }
+        // 杂项
+        if (w.contains("sticker")) return "Sticker";
+        if (w.contains("music kit")) return "Music Kit";
+        if (w.contains("charm")) return "Charm"; // 挂件
+        if (w.contains("agent")) return "Agent"; // 探员
+        if (w.contains("case") || w.contains("capsule") || w.contains("package")) return "Container";
+        if (w.contains("key")) return "Tool";
+        if (w.contains("patch")) return "Patch"; // 布章
+        if (w.contains("graffiti")) return "Graffiti"; // 涂鸦
+        if (w.contains("pin")) return "Pin"; // 徽章
+
+        // 枪械细分
+        if (StrUtil.equalsAnyIgnoreCase(weapon,
+                "AK-47", "M4A4", "M4A1-S", "AWP", "Galil AR", "FAMAS", "AUG", "SG 553", "SSG 08", "SCAR-20", "G3SG1")) {
+            return "Rifle";
+        }
+        if (StrUtil.equalsAnyIgnoreCase(weapon,
+                "Glock-18", "USP-S", "P2000", "P250", "Desert Eagle", "Five-SeveN", "Tec-9", "CZ75-Auto", "Dual Berettas", "R8 Revolver")) {
+            return "Pistol";
+        }
+        if (StrUtil.equalsAnyIgnoreCase(weapon,
+                "MAC-10", "MP9", "MP7", "UMP-45", "P90", "PP-Bizon", "MP5-SD")) {
+            return "SMG";
+        }
+        if (StrUtil.equalsAnyIgnoreCase(weapon,
+                "Nova", "XM1014", "MAG-7", "Sawed-Off", "M249", "Negev")) {
+            return "Heavy"; // 散弹枪和机枪统称为重武器
         }
 
-        return "Unknown";
-    }
-
-    private String extractExterior(String marketHashName) {
-        // 磨损等级列表
-        String[] exteriors = {
-                "Factory New", "Minimal Wear", "Field-Tested",
-                "Well-Worn", "Battle-Scarred"
-        };
-
-        for (String exterior : exteriors) {
-            if (marketHashName.contains(exterior)) {
-                return exterior;
-            }
-        }
-
-        return "Unknown";
-    }
-
-    private String extractRarity(String marketHashName) {
-        // 稀有度关键词
-        if (marketHashName.contains("Contraband")) {
-            return "Contraband";
-        } else if (marketHashName.contains("Covert") || marketHashName.contains("★")) {
-            return "Covert";
-        } else if (marketHashName.contains("Classified")) {
-            return "Classified";
-        } else if (marketHashName.contains("Restricted")) {
-            return "Restricted";
-        } else if (marketHashName.contains("Mil-Spec")) {
-            return "Mil-Spec";
-        } else if (marketHashName.contains("Industrial")) {
-            return "Industrial";
-        } else if (marketHashName.contains("Consumer")) {
-            return "Consumer";
-        }
-
-        return "Unknown";
+        return "Other";
     }
 }
