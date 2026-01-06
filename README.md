@@ -1,72 +1,191 @@
-# AI CSGO监测平台
 
-## 一、项目定位与核心价值
-**平台定位**：AI CSGO监测平台
-**核心价值**：
-- 实时市场洞察，把握最佳交易时机
-- 数据驱动的投资决策支持
-- 个性化监控与智能预警系统
-- 风险控制与收益优化建议
+# 🦅 CS2-Market-Intelligence (CMI)
 
-## 二、核心功能模块详细设计
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-17%2B-orange?style=for-the-badge&logo=openjdk" alt="Java">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.2-green?style=for-the-badge&logo=springboot" alt="Spring Boot">
+  <img src="https://img.shields.io/badge/Spring%20AI-Alibaba-blue?style=for-the-badge&logo=alibabacloud" alt="Spring AI">
+  <img src="https://img.shields.io/badge/Vue.js-3.x-4FC08D?style=for-the-badge&logo=vuedotjs" alt="Vue 3">
+  <img src="https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge" alt="License">
+</p>
 
-### 1. 数据监测与分析模块
-#### 库存监测系统
-- **实时库存追踪**：监控Steam市场、第三方交易平台库存变化
-- **大额流动预警**：识别异常库存转移（如大商抛售/囤货）
-- **供应趋势分析**：分析各饰品长期库存变化趋势
-- **平台间库存对比**：比较不同平台的库存分布情况
+> **基于 Spring AI Alibaba + Vue3 的 CS2 饰品全链路监测与智能量化分析平台。**
+>
+> *Market Data + GenAI = Alpha.*
 
-#### 价格监测系统
-- **多平台价格聚合**：整合Steam、Buff、IGXE等主流平台价格
-- **价格波动分析**：
-    - 实时涨跌幅监测
-    - 历史价格对比（24h、7天、30天、季度）
-    - 季节性/活动性价格规律识别
-- **价格异常检测**：识别异常高价/低价挂单
+[English Documentation](README_EN.md) | [演示视频](LINK_TO_VIDEO) | [部署文档](docs/deploy.md)
 
-### 2. 智能预警与通知模块
-#### 自定义监控规则
-- **阈值触发**：价格/库存达到设定值自动提醒
-- **复合条件**：支持多条件组合（如“价格下降10%且库存减少50+”）
-- **趋势预警**：基于趋势线突破、技术指标的信号提醒
+---
 
-#### 多通道通知
-- 平台内消息
-- 邮件通知
-- Telegram/Discord机器人
-- 微信小程序推送
+## 📖 项目简介 (Introduction)
 
-### 3. AI分析决策模块
-#### 饰品评分系统（多维评估）
-- **获利潜力维度**：
-    - 历史价格波动性分析
-    - 涨幅统计与预测
-    - 套利空间计算（跨平台价差）
+**CS2-Market-Intelligence** 是一个专为 CS2 (Counter-Strike 2) 饰品市场打造的智能化监测系统。
 
-- **流动性维度**：
-    - 交易频率分析
-    - 挂单成交速度
-    - 买卖盘深度评估
+不同于传统的爬虫工具，本项目率先引入 **Spring AI Alibaba**，利用大模型（LLM）能力对市场数据进行深层次解读。它不仅能告诉你“什么在涨”，还能结合全网舆情分析“为什么涨”，并给出风险提示。
 
-- **风险评估维度**：
-    - 价格稳定性评分
-    - 受游戏更新/赛事影响程度
-    - 饰品稀有度与长期价值
+本项目采用 **"Monolith First" (单体优先)** 策略，初期基于 Spring Boot 构建高性能单体应用，并预留了完整的 **Spring Cloud Alibaba** 微服务演进接口。
 
-#### 智能推荐引擎
-- **个性化推荐**：基于用户风险偏好、资金规模推荐饰品
-- **市场机会挖掘**：识别被低估或即将上涨的饰品
-- **投资组合建议**：提供分散投资建议
+## 🏗 系统架构 (Architecture)
 
-### 4. 用户管理模块
-- **个人监控列表**：自定义关注饰品清单
-- **策略模板**：保存常用监控策略
-- **历史操作记录**：追踪用户决策与结果
-- **盈亏统计分析**：评估用户交易表现
+### 当前架构 (Phase 1: High-Performance Monolith)
 
-### 5. 数据可视化模块
-- **仪表盘**：关键指标概览
-- **价格走势图**：交互式K线图与技术指标
-- **热力图**：展示不同饰品类别/品质的热度
-- **对比分析工具**：多饰品对比分析
+利用 Spring AI 的 `ChatClient` 和 `RAG` 能力，将大模型无缝集成到 Java 业务流中。
+
+```mermaid
+graph TD
+    User((用户)) --> |Browser/Mobile| Web[Vue 3 前端应用]
+    
+    subgraph "Backend Server (Spring Boot 3.x)"
+        Web --> |REST API| Controller
+        
+        subgraph "Business Logic"
+            Controller --> Monitor[监测服务]
+            Controller --> Strategy[策略引擎]
+            Controller --> Advisor[AI 投顾 Agent]
+        end
+        
+        subgraph "Spring AI Alibaba Core"
+            Advisor --> |Prompt| SAI[Spring AI Framework]
+            SAI --> |RAG/Context| VectorDB[(Vector Store)]
+            SAI --> |Inference| DashScope[阿里云百炼/通义千问]
+        end
+        
+        subgraph "Data Pipeline"
+            Crawler[多线程爬虫] --> |Buff/Steam| RawData
+            RawData --> |Clean| TSDB[(TimescaleDB)]
+        end
+    end
+    
+    Monitor --> Redis[(Redis Cache)]
+    Strategy --> TSDB
+
+```
+
+### 演进路线 (Phase 2: Microservices)
+
+未来将拆分为 `cmi-crawler` (数据), `cmi-analysis` (AI计算), `cmi-trade` (交易) 等微服务，使用 **Nacos** 做注册中心，**Sentinel** 做流量风控。
+
+## ✨ 核心功能 (Features)
+
+### 1. 🤖 AI 智能投顾 (Powered by Spring AI Alibaba)
+
+* **市场情绪分析**：自动抓取 Reddit/贴吧 讨论贴，利用 LLM 分析市场情绪（恐慌/贪婪），辅助判断买卖时机。
+* **智能研报生成**：每天定时生成《CS2 饰品日报》，由 AI 总结当日涨跌幅 Top10 及背后的原因。
+* **自然语言查询**：支持用户提问 "帮我找一下最近一周跌幅超过 20% 且成交量稳定的印花"，AI 自动转化为 SQL 查询数据库。
+
+### 2. 🦅 全局数据监测
+
+* **跨平台价差监控**：实时计算 Buff 与 Steam 之间的汇率差，捕捉“挂刀”套利机会。
+* **库存异动预警**：追踪大商库存，当某饰品库存短时间内剧烈波动时触发警报。
+* **异常价格清洗**：基于统计学算法过滤“洗钱”或“互刷”产生的虚假成交记录。
+
+### 3. 📈 现代化可视化看板
+
+* **Vue 3 + ECharts/TradingView**：丝滑的交互体验。
+* **实时 K 线**：毫秒级数据更新。
+* **资产透视**：个人持仓盈亏实时计算。
+
+## 🛠 技术栈 (Tech Stack)
+
+| 领域 | 技术选型 | 说明 |
+| :--- | :--- | :--- |
+| **后端框架** | **Spring Boot 3.2** | 核心底座，Java 17+ |
+| **AI 框架** | **Spring AI Alibaba** | 接入通义千问 (Qwen)，实现 RAG 与 Agent |
+| **前端框架** | **Vue 3** + Vite + Pinia | 组合式 API 开发，高性能单页应用 |
+| **UI 组件库** | Naive UI / Element Plus | 现代化 UI 设计 |
+| **数据存储** | **MySQL 8.0** | 存储业务数据与近期价格历史 (MVP阶段) |
+| **缓存/消息** | Redis, Kafka (Optional) | 缓存热点数据与异步解耦 |
+| **网络 I/O** | Netty / Reactor | 维持 WebSocket 长连接推送 |
+| **部署** | Docker, Docker Compose | 一键编排 |
+
+## 🚀 快速开始 (Quick Start)
+
+### 前置要求
+
+* JDK 17+
+* Node.js 18+
+* Docker Desktop
+* [阿里云百炼 API Key](https://bailian.console.aliyun.com/) (用于 AI 功能)
+
+### 1. 启动基础依赖
+
+使用 Docker Compose 启动数据库和 Redis：
+
+```bash
+cd deployment
+docker-compose up -d
+
+```
+
+### 2. 后端配置与启动
+
+修改 `src/main/resources/application.yml`，配置你的 API Key：
+
+```yaml
+spring:
+  ai:
+    dashscope:
+      api-key: sk-xxxxxxxxxxxxxxxxxxxx # 你的阿里云 DashScope Key
+
+```
+
+启动 Spring Boot 应用：
+
+```bash
+./mvnw spring-boot:run
+
+```
+
+### 3. 前端启动
+
+```bash
+cd cmi-ui
+npm install
+npm run dev
+
+```
+
+访问 `http://localhost:5173` 即可看到仪表盘。
+
+## 🗺 路线图 (Roadmap)
+
+我们致力于将 CMI 打造成最专业的开源饰品量化平台。
+
+* [ ] **v0.1.0 (MVP)**
+* [ ] 搭建 Spring Boot + Vue3 脚手架
+* [ ] 集成 Spring AI Alibaba 完成基础对话功能
+* [ ] Buff 热门饰品爬虫与数据入库 (TimescaleDB)
+
+
+* [ ] **v0.5.0 (AI 增强)**
+* [ ] 实现 "AI 市场日报" 生成功能
+* [ ] 接入 RAG (检索增强生成)，让 AI 基于历史价格回答问题
+* [ ] 微信/钉钉 机器人报警推送
+
+
+* [ ] **v1.0.0 (Cloud Ready)**
+* [ ] 引入 Nacos 配置中心
+* [ ] 模块拆分：数据层与业务层解耦
+* [ ] 开放 RESTful API 供社区调用
+
+
+- [ ] **v1.5.0 (Performance)**
+- [ ] 随着数据量增长，将历史价格数据表迁移至 TimescaleDB 或 ClickHouse
+- [ ] 引入分库分表策略
+
+
+## 🤝 贡献指南 (Contributing)
+
+本项目遵循 Git Flow 工作流。
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 提交 Pull Request
+
+## ⚠️ 免责声明 (Disclaimer)
+
+1. **学习用途**：本项目仅供 Java 技术与 AI 应用学习交流，**严禁用于任何商业盈利行为**。
+2. **账号安全**：CS2 饰品交易涉及资金安全，请勿将 Steam 账号密码托管于任何非官方平台。使用爬虫功能时请严格遵守目标网站 `robots.txt` 协议。
+3. **投资风险**：AI 生成的建议仅供参考，不构成任何投资建议。市场有风险，入市需谨慎。
