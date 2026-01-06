@@ -1,4 +1,4 @@
-package com.zan.common;
+package com.zan.csgo.model.common;
 
 /**
  * @Author Zan
