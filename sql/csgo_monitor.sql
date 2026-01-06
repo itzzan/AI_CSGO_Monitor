@@ -10,7 +10,7 @@ USE `csgo_monitor`;
 CREATE TABLE IF NOT EXISTS `skin_item`
 (
     `id`                    BIGINT              NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `skin_item_id`          BIGINT              NOT NULL DEFAULT 0 COMMENT '饰品基础信息ID（唯一，对应Steam ClassId）',
+    `skin_item_id`          BIGINT              NOT NULL DEFAULT 0 COMMENT '饰品基础信息ID',
 
     -- 核心识别信息
     `skin_market_hash_name` VARCHAR(255)        NOT NULL DEFAULT '' COMMENT '饰品英文市场全名 (唯一标识)',
@@ -41,8 +41,9 @@ CREATE TABLE IF NOT EXISTS `skin_item`
     `del_flag`              TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 COMMENT '逻辑删除位',
 
     PRIMARY KEY (`id`),
-    -- 唯一索引（基础信息ID）
-    UNIQUE KEY `uk_skin_item_id` (`skin_item_id`),
+    -- 唯一索引（饰品英文市场全名）
+    UNIQUE KEY `uk_skin_market_hash_name` (`skin_market_hash_name`),
+    KEY `idx_skin_item_id` (`skin_item_id`),
     KEY `idx_skin_category` (`skin_category`),
     KEY `idx_skin_weapon` (`skin_weapon`),
     KEY `idx_skin_pattern` (`skin_pattern`),
