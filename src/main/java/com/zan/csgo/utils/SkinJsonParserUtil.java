@@ -107,9 +107,9 @@ public class SkinJsonParserUtil {
     private String extractWeapon(String marketHashName) {
         // 常见的武器类型列表
         String[] weapons = {
-                "AK-47", "M4A4", "M4A1-S", "AWP", "Desert Eagle", "USP-S", "Glock-18",
-                "P250", "Tec-9", "Five-SeveN", "CZ75-Auto", "P90", "MP9", "MP7",
-                "UMP-45", "MAC-10", "Galil AR", "FAMAS", "SG 553", "AUG",
+                "AK-47", "M4A4", "M4A1-S", "AWP", "Desert Eagle", "USP-S", "Glock-18", "Dual Berettas",
+                "P250", "P2000", "Tec-9", "Five-SeveN", "CZ75-Auto", "P90", "PP-Bizon", "MP9", "MP7",
+                "UMP-45", "MAC-10", "Galil AR", "FAMAS", "SG 553", "AUG", "MP5-SD",
                 "SSG 08", "SCAR-20", "G3SG1", "MAG-7", "Nova", "XM1014", "Sawed-Off",
                 "M249", "Negev", "R8 Revolver", "Bayonet", "Karambit", "M9 Bayonet",
                 "Butterfly Knife", "Flip Knife", "Gut Knife", "Huntsman Knife",
@@ -135,6 +135,20 @@ public class SkinJsonParserUtil {
             return "Gloves";
         } else if (marketHashName.contains("Knife")) {
             return "Knife";
+        } else if (marketHashName.contains("Graffiti")) {
+            return "Graffiti";
+        } else if (marketHashName.contains("Souvenir Charm")) {
+            return "Souvenir Charm";
+        } else if (marketHashName.contains("Key")) {
+            return "Key";
+        } else if (marketHashName.contains("Patch")) {
+            return "Patch";
+        } else if (marketHashName.contains("Capsule")) {
+            return "Capsule";
+        } else if (marketHashName.contains("Pin")) {
+            return "Pin";
+        } else if (marketHashName.contains("Charm")) {
+            return "Charm";
         }
 
         return "Unknown";
