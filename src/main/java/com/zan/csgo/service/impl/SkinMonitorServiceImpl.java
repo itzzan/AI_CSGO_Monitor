@@ -9,6 +9,7 @@ import com.zan.csgo.mapper.SkinPriceHistoryMapper;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
 import com.zan.csgo.model.entity.SkinItemEntity;
 import com.zan.csgo.model.entity.SkinPriceHistoryEntity;
+import com.zan.csgo.service.INotificationService;
 import com.zan.csgo.service.ISkinItemService;
 import com.zan.csgo.service.ISkinMonitorService;
 import com.zan.csgo.vo.PlatformPriceVO;
@@ -33,7 +34,7 @@ import java.util.function.Consumer;
  */
 @Service
 @Slf4j
-public class SkinMonitorService implements ISkinMonitorService {
+public class SkinMonitorServiceImpl implements ISkinMonitorService {
 
     @Resource
     private ISkinItemService skinItemService;
@@ -43,6 +44,9 @@ public class SkinMonitorService implements ISkinMonitorService {
 
     @Resource
     private MarketStrategyFactory strategyFactory;
+
+    @Resource
+    private INotificationService notificationService;
 
     /**
      * 执行监控并返回结果 VO
@@ -114,10 +118,10 @@ public class SkinMonitorService implements ISkinMonitorService {
     /**
      * 🔥 核心通用的策略执行器
      *
-     * @param platform   平台枚举
-     * @param searchKey  查询Key (可能是ID，也可能是名字)
-     * @param item       饰品实体
-     * @param onSuccess  成功后的回调 (用于处理各平台特有的逻辑，如ID回填)
+     * @param platform  平台枚举
+     * @param searchKey 查询Key (可能是ID，也可能是名字)
+     * @param item      饰品实体
+     * @param onSuccess 成功后的回调 (用于处理各平台特有的逻辑，如ID回填)
      */
     private PlatformPriceVO executeStrategy(PlatformEnum platform, Object searchKey, SkinItemEntity item, Consumer<PriceFetchResultDTO> onSuccess) {
         String platformName = platform.getName();
@@ -168,7 +172,7 @@ public class SkinMonitorService implements ISkinMonitorService {
         String changeRateStr = "-";
         String changeTag = "";
 
-        // 2. 计算日涨跌幅 (vs 1min前)
+        // 2. 计算分钟涨跌幅 (vs 1min前)
         if (history24h != null && history24h.getPrice().compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal oldPrice = history24h.getPrice();
             BigDecimal diff = currentPrice.subtract(oldPrice);
@@ -179,25 +183,33 @@ public class SkinMonitorService implements ISkinMonitorService {
 
             if (percent.compareTo(BigDecimal.ZERO) > 0) {
                 changeRateStr = "+" + percent + "%";
-                if (percent.doubleValue() > 10.0) changeTag = "🔥 暴涨";
-                else if (percent.doubleValue() > 5.0) changeTag = "📈 大涨";
+                if (percent.doubleValue() > 10.0) {
+                    changeTag = "🔥 暴涨";
+                } else if (percent.doubleValue() > 5.0) {
+                    changeTag = "📈 大涨";
+                }
             } else if (percent.compareTo(BigDecimal.ZERO) < 0) {
                 changeRateStr = percent + "%";
-                if (percent.doubleValue() < -10.0) changeTag = "💸 暴跌";
-                else if (percent.doubleValue() < -5.0) changeTag = "📉 大跌";
+                if (percent.doubleValue() < -10.0) {
+                    changeTag = "💸 暴跌";
+                } else if (percent.doubleValue() < -5.0) {
+                    changeTag = "📉 大跌";
+                }
             } else {
                 changeRateStr = "0.00%";
             }
-        }
 
-        // 3. 瞬时波动报警 (vs 上一次)
-        if (historyLast != null && historyLast.getPrice().compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal lastPrice = historyLast.getPrice();
-            BigDecimal jumpRate = currentPrice.subtract(lastPrice).divide(lastPrice, 4, RoundingMode.HALF_UP).abs();
-
-            if (jumpRate.doubleValue() > 0.05) { // 波动 > 5%
-                log.warn("🚨 [价格异动] {} - {} : {} -> {}", item.getSkinName(), platform, lastPrice, currentPrice);
-                // todo: 发送钉钉/飞书通知
+            // 3. 瞬时波动报警 (vs 上一次)
+            if (Math.abs(percent.doubleValue()) > 5.0) { // 波动 > 5%
+                log.warn("🚨 [价格异动] {} - {} : {} -> {}", item.getSkinName(), platform, oldPrice, currentPrice);
+                // 🔥 接入微信提醒，设定阈值：比如波动绝对值 >= 2% 就发微信
+                notificationService.sendPriceAlert(
+                        item.getSkinName(),
+                        platform,
+                        oldPrice,      // 旧价格
+                        currentPrice,   // 新价格
+                        changeRateStr   // 幅度字符串 (如 "+5.20%")
+                );
             }
         }
 
