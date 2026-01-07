@@ -141,7 +141,7 @@ public class SkinMonitorService implements ISkinMonitorService {
      * 私有辅助方法：处理 Buff 的复杂逻辑 (价格入库 + ID自学习)
      */
     private PlatformPriceVO handleBuffResult(SkinItemEntity item, PriceFetchResultDTO result) {
-        String statusMsg;
+        String statusMsg = "";
         String targetIdStr = null;
 
         if (result.isSuccess()) {
@@ -159,9 +159,13 @@ public class SkinMonitorService implements ISkinMonitorService {
                 // 如果数据库是空的，或者 ID 变了 -> 执行更新
                 if (currentDbId == null || currentDbId != fetchedId) {
                     item.setBuffGoodsId(fetchedId);
-                    skinItemService.fillBuffGoodsId(item);
-                    statusMsg = "映射建立成功，价格已更新";
-                    log.info(">>> [自学习] 饰品 [{}] 更新 BuffID: {}", item.getSkinName(), fetchedId);
+                    boolean b = skinItemService.fillBuffGoodsId(item);
+                    if (b) {
+                        statusMsg = "映射建立成功，价格已更新";
+                        log.info(">>> [自学习] 饰品 [{}] 更新 BuffID 成功: {}", item.getSkinName(), fetchedId);
+                    } else {
+                        log.warn(">>> [自学习] 饰品 [{}] 更新 BuffID 失败", item.getSkinName());
+                    }
                 } else {
                     statusMsg = "价格刷新成功";
                 }

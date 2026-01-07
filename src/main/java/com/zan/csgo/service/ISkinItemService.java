@@ -13,5 +13,5 @@ public interface ISkinItemService extends IService<SkinItemEntity> {
 
     SkinItemEntity querySkinItemByItemId(Long skinItemId);
 
-    void fillBuffGoodsId(SkinItemEntity item);
+    boolean fillBuffGoodsId(SkinItemEntity item);
 }

@@ -2,8 +2,10 @@ package com.zan.csgo.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
 import com.zan.csgo.exception.BusinessException;
 import com.zan.csgo.model.dto.JsonSkinDataDTO;
+import com.zan.csgo.model.dto.JsonSkinPlatformDataDTO;
 import com.zan.csgo.model.entity.SkinItemEntity;
 import com.zan.csgo.service.IDataService;
 import com.zan.csgo.service.ISkinItemService;
@@ -36,10 +38,10 @@ public class DataServiceImpl implements IDataService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void importFromJsonFile(String filePath) {
+    public void importSkinData(String filePath) {
         try {
             // 解析JSON文件
-            List<JsonSkinDataDTO> jsonDataList = skinJsonParserUtil.parseJsonFile(filePath);
+            List<JsonSkinDataDTO> jsonDataList = skinJsonParserUtil.parseSkinJsonFile(filePath);
 
             if (CollectionUtil.isEmpty(jsonDataList)) {
                 throw new BusinessException("JSON文件为空或解析失败");
@@ -93,5 +95,33 @@ public class DataServiceImpl implements IDataService {
             log.error("导入JSON文件失败: {}", filePath, e);
             throw new BusinessException("导入失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public void importSkinPlatformData(String filePath) {
+        // 1. 调用解析方法
+        List<JsonSkinPlatformDataDTO> dataList = skinJsonParserUtil.parseSkinPlatformJsonFile(SkinJsonParserUtil.JSON_SKIN_PLATFORM_FILE_PATH);
+
+        if (dataList.isEmpty()) return;
+
+        // 2. 遍历处理 (可以使用 batch update 优化，这里演示逻辑)
+        int successCount = 0;
+        for (JsonSkinPlatformDataDTO dto : dataList) {
+            Long buffId = dto.getBuff163_goods_id();
+            String hashName = dto.getMarketHashName();
+
+            if (buffId != null && buffId > 0 && StrUtil.isNotBlank(hashName)) {
+                // 执行数据库更新
+                SkinItemEntity item = new SkinItemEntity();
+                item.setSkinMarketHashName(hashName);
+                item.setBuffGoodsId(buffId);
+                boolean updated = skinItemService.fillBuffGoodsId(item);
+
+                if (updated) {
+                    successCount++;
+                }
+            }
+        }
+        log.info("同步完成，实际更新数据库: {} 条", successCount);
     }
 }

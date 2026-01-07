@@ -13,5 +13,12 @@ public interface IDataService {
      *
      * @param filePath JSON文件路径
      */
-    void importFromJsonFile(String filePath);
+    void importSkinData(String filePath);
+
+    /**
+     * 同步本地字典数据
+     *
+     * @param filePath JSON文件路径
+     */
+    void importSkinPlatformData(String filePath);
 }

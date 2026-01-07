@@ -1,6 +1,7 @@
 package com.zan.csgo.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -42,19 +43,21 @@ public class SkinItemServiceImpl extends ServiceImpl<SkinItemMapper, SkinItemEnt
      * 填充Buff商品ID
      *
      * @param item 饰品信息
+     * @return
      */
     @Override
-    public void fillBuffGoodsId(SkinItemEntity item) {
+    public boolean fillBuffGoodsId(SkinItemEntity item) {
         if (ObjectUtil.isNull(item)) {
-            return;
+            return false;
         }
-        if (ObjectUtil.isNull(item.getId()) || ObjectUtil.isNull(item.getBuffGoodsId()) || item.getBuffGoodsId() <= 0) {
-            return;
+        if (ObjectUtil.isNull(item.getBuffGoodsId()) || item.getBuffGoodsId() <= 0) {
+            return false;
         }
         LambdaUpdateWrapper<SkinItemEntity> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(SkinItemEntity::getId, item.getId());
+        wrapper.eq(ObjectUtil.isNotNull(item.getId()), SkinItemEntity::getId, item.getId());
+        wrapper.eq(StrUtil.isNotBlank(item.getSkinMarketHashName()), SkinItemEntity::getSkinMarketHashName, item.getSkinMarketHashName());
         wrapper.eq(SkinItemEntity::getDelFlag, DelFlagEnum.NO.getValue());
         wrapper.set(SkinItemEntity::getBuffGoodsId, item.getBuffGoodsId());
-        this.update(wrapper);
+        return this.update(wrapper);
     }
 }

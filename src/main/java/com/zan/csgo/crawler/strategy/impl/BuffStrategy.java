@@ -26,7 +26,7 @@ import java.math.BigDecimal;
 public class BuffStrategy implements MarketStrategy {
 
     // ⚠️ 请务必定期更新此 Cookie，否则会报 Redirecting... 或 Login Required
-    private static final String BUFF_COOKIE = "mcdev_cookie_id=rwuml_1766390467; timing_user_id=time_zIkYNMjzBc; Locale-Supported=zh-Hans; game=csgo; Device-Id=Yo3umOFnMmt09TDzlsrN; NTES_YD_SESS=Wb0_OHbAgntbGGYiuAtsXHKrW3aVyDo8hR9LTqXcTdUk2wCz2RvHFKpHshTiRI29IpEpfzSJr3DXLiNVYgAStAWHv_5GLy8UZLjsRdcAB7mtY4bPfJLaCXnb5nzL6CT3rOpqOoiF.ksW9YHiB4QV1sV5iLW4mnhl.aS9PZaEGbwMRi6AjwQCbLvT5lrdWvurB1ursMf6S3T1aWFeuSRmm0IoTUqCrb4jj9NXPGoeO5dDA; S_INFO=1767691020|0|0&60##|18858411495; P_INFO=18858411495|1767691020|1|netease_buff|00&99|null&null&null#zhj&330100#10#0|&0|null|18858411495; remember_me=U1079962975|y2rRJTTfAJksQU0Ot7j972jdlc2kbnPs; session=1-TlOOT9V8T_v31dncQH8DKO2c3ervbKC21wn-ZJRNPLfe2022732295; csrf_token=Ijg4NzhmODQ0OWRmNjQ0NjJmNDk5ZDU4ZTg0MTVhMDRjNDdmNDkxZWIi.aV3C7g.7I8-AYIla7uVhZWLFuwgcygEzro";
+    private static final String BUFF_COOKIE = "请务必定期更新此 Cookie";
 
     // 价格接口 (参数: goods_id)
     private static final String BUFF_PRICE_API = "https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&page_size=500&sort_by=default&mode=&allow_tradable_cooldown=1&goods_id=";

@@ -4,6 +4,7 @@ import com.zan.csgo.model.common.Result;
 import com.zan.csgo.service.IDataService;
 import com.zan.csgo.utils.SkinJsonParserUtil;
 import jakarta.annotation.Resource;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -20,9 +21,15 @@ public class DataController {
     @Resource
     private IDataService dataService;
 
-    @RequestMapping("/import")
-    public Result<Void> importData() {
-        dataService.importFromJsonFile(SkinJsonParserUtil.JSON_FILE_PATH);
+    @PostMapping("/importSkinData")
+    public Result<Void> importSkinData() {
+        dataService.importSkinData(SkinJsonParserUtil.JSON_SKIN_FILE_PATH);
+        return Result.success();
+    }
+
+    @PostMapping("/importSkinPlatformData")
+    public Result<Void> importSkinPlatformData() {
+        dataService.importSkinPlatformData(SkinJsonParserUtil.JSON_SKIN_PLATFORM_FILE_PATH);
         return Result.success();
     }
 }

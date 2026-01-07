@@ -1,16 +1,21 @@
 package com.zan.csgo.utils;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.google.common.collect.Lists;
 import com.zan.csgo.model.dto.JsonSkinDataDTO;
+import com.zan.csgo.model.dto.JsonSkinPlatformDataDTO;
 import com.zan.csgo.model.entity.SkinItemEntity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,7 +29,9 @@ import java.util.regex.Pattern;
 @Slf4j
 public class SkinJsonParserUtil {
 
-    public static final String JSON_FILE_PATH = "static/data.json";
+    public static final String JSON_SKIN_FILE_PATH = "static/data.json";
+
+    public static final String JSON_SKIN_PLATFORM_FILE_PATH = "static/cs2_marketplaceids.json";
 
     // 预编译正则：匹配标准磨损等级 (严格匹配括号结尾)
     private static final Pattern EXTERIOR_PATTERN = Pattern.compile("\\((Factory New|Minimal Wear|Field-Tested|Well-Worn|Battle-Scarred)\\)$");
@@ -35,24 +42,12 @@ public class SkinJsonParserUtil {
     /**
      * 解析JSON文件
      */
-    public List<JsonSkinDataDTO> parseJsonFile(String filePath) {
+    public List<JsonSkinDataDTO> parseSkinJsonFile(String filePath) {
         try {
             String jsonStr = FileUtil.readUtf8String(filePath);
             return JSONUtil.toList(jsonStr, JsonSkinDataDTO.class);
         } catch (Exception e) {
             log.error("解析JSON文件失败: {}", filePath, e);
-            return Lists.newArrayList();
-        }
-    }
-
-    /**
-     * 解析JSON字符串
-     */
-    public List<JsonSkinDataDTO> parseJsonString(String jsonStr) {
-        try {
-            return JSONUtil.toList(jsonStr, JsonSkinDataDTO.class);
-        } catch (Exception e) {
-            log.error("解析JSON字符串失败", e);
             return Lists.newArrayList();
         }
     }
@@ -185,5 +180,52 @@ public class SkinJsonParserUtil {
         }
 
         return "Other";
+    }
+
+    // ---------------------------------------------------------------
+
+    /**
+     * 解析特定的 Marketplace IDs JSON 文件
+     * @param filePath ClassPath 路径，例如 "static/cs2_marketplaceids.json"
+     */
+    public List<JsonSkinPlatformDataDTO> parseSkinPlatformJsonFile(String filePath) {
+        try {
+            // 1. 读取文件 (推荐用 Hutool 的 ResourceUtil，自动处理 ClassPath)
+            String jsonStr = ResourceUtil.readUtf8Str(filePath);
+
+            // 2. 解析为 JSONObject (因为根节点是 {})
+            JSONObject root = JSONUtil.parseObj(jsonStr);
+
+            // 3. 获取 "items" 节点
+            JSONObject items = root.getJSONObject("items");
+            if (items == null || items.isEmpty()) {
+                log.warn("JSON文件中未找到 items 节点");
+                return Lists.newArrayList();
+            }
+
+            // 4. 遍历 Map 的 Key，组装成 List
+            List<JsonSkinPlatformDataDTO> resultList = new ArrayList<>();
+            Set<String> keys = items.keySet();
+
+            for (String marketHashName : keys) {
+                // 获取 value 部分
+                JSONObject itemDetail = items.getJSONObject(marketHashName);
+
+                // 转换为 DTO (提取 buff163_goods_id 等)
+                JsonSkinPlatformDataDTO dto = itemDetail.toBean(JsonSkinPlatformDataDTO.class);
+
+                // 【关键】把 Map 的 Key (饰品名) 塞到 DTO 里
+                dto.setMarketHashName(marketHashName);
+
+                resultList.add(dto);
+            }
+
+            log.info("成功解析 JSON 文件，共获取 {} 条数据", resultList.size());
+            return resultList;
+
+        } catch (Exception e) {
+            log.error("解析JSON文件失败: {}", filePath, e);
+            return Lists.newArrayList();
+        }
     }
 }
