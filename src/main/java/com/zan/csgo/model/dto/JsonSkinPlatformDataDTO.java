@@ -19,5 +19,5 @@ public class JsonSkinPlatformDataDTO {
     private Long buff163_goods_id;
 
     // 其他字段按需添加，比如 youpin_id 等
-    // private Integer youpin_id;
+    private Long youpin_id;
 }

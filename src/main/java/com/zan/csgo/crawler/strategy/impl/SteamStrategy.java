@@ -5,6 +5,7 @@ import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
+import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -25,7 +26,7 @@ public class SteamStrategy implements MarketStrategy {
 
     @Override
     public String getPlatformName() {
-        return "STEAM";
+        return PlatformEnum.STEAM.getName();
     }
 
     @Override

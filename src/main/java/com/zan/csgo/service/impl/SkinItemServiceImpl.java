@@ -46,18 +46,20 @@ public class SkinItemServiceImpl extends ServiceImpl<SkinItemMapper, SkinItemEnt
      * @return
      */
     @Override
-    public boolean fillBuffGoodsId(SkinItemEntity item) {
+    public boolean fillBuffGoodsIdAndYoupinId(SkinItemEntity item) {
         if (ObjectUtil.isNull(item)) {
             return false;
         }
-        if (ObjectUtil.isNull(item.getBuffGoodsId()) || item.getBuffGoodsId() <= 0) {
+        if ((ObjectUtil.isNull(item.getBuffGoodsId()) || item.getBuffGoodsId() <= 0)
+                && (ObjectUtil.isNull(item.getYoupinId()) || item.getYoupinId() <= 0)) {
             return false;
         }
         LambdaUpdateWrapper<SkinItemEntity> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(ObjectUtil.isNotNull(item.getId()), SkinItemEntity::getId, item.getId());
         wrapper.eq(StrUtil.isNotBlank(item.getSkinMarketHashName()), SkinItemEntity::getSkinMarketHashName, item.getSkinMarketHashName());
         wrapper.eq(SkinItemEntity::getDelFlag, DelFlagEnum.NO.getValue());
-        wrapper.set(SkinItemEntity::getBuffGoodsId, item.getBuffGoodsId());
+        wrapper.set(ObjectUtil.isNotNull(item.getBuffGoodsId()) && item.getBuffGoodsId() > 0, SkinItemEntity::getBuffGoodsId, item.getBuffGoodsId());
+        wrapper.set(ObjectUtil.isNotNull(item.getYoupinId()) && item.getYoupinId() > 0, SkinItemEntity::getYoupinId, item.getYoupinId());
         return this.update(wrapper);
     }
 }

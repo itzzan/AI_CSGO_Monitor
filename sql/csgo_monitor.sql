@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS `skin_item`
 
     -- 额外信息
     `buff_goods_id`         BIGINT              NOT NULL DEFAULT 0 COMMENT 'Buff 商品ID',
+    `youpin_id`             BIGINT              NOT NULL DEFAULT 0 COMMENT '悠悠有品 商品ID',
 
     -- 审计字段
     `version`               INT UNSIGNED        NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',

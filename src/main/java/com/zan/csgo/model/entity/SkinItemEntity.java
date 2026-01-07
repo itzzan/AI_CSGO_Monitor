@@ -99,6 +99,12 @@ public class SkinItemEntity implements Serializable {
     private Long buffGoodsId;
 
     /**
+     * 悠悠有品 ID
+     */
+    @TableField("youpin_id")
+    private Long youpinId;
+
+    /**
      * 版本号
      */
     @Version

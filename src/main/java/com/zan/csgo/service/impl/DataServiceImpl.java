@@ -108,18 +108,23 @@ public class DataServiceImpl implements IDataService {
         int successCount = 0;
         for (JsonSkinPlatformDataDTO dto : dataList) {
             Long buffId = dto.getBuff163_goods_id();
+            Long youpinId = dto.getYoupin_id();
             String hashName = dto.getMarketHashName();
 
-            if (buffId != null && buffId > 0 && StrUtil.isNotBlank(hashName)) {
-                // 执行数据库更新
-                SkinItemEntity item = new SkinItemEntity();
+            SkinItemEntity item = new SkinItemEntity();
+            if (StrUtil.isNotBlank(hashName)) {
                 item.setSkinMarketHashName(hashName);
+            }
+            if (buffId != null && buffId > 0) {
                 item.setBuffGoodsId(buffId);
-                boolean updated = skinItemService.fillBuffGoodsId(item);
-
-                if (updated) {
-                    successCount++;
-                }
+            }
+            if (youpinId != null && youpinId > 0) {
+                item.setYoupinId(youpinId);
+            }
+            // 填充Buff商品ID / 悠悠ID
+            boolean updated = skinItemService.fillBuffGoodsIdAndYoupinId(item);
+            if (updated) {
+                successCount++;
             }
         }
         log.info("同步完成，实际更新数据库: {} 条", successCount);
