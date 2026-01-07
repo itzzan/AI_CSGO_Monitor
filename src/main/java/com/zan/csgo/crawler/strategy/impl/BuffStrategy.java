@@ -11,6 +11,7 @@ import cn.hutool.json.JSONUtil;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
+import com.zan.csgo.utils.UserAgentUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -90,7 +91,7 @@ public class BuffStrategy implements MarketStrategy {
             HttpRequest request = HttpRequest.get(url)
                     .header("Cookie", buffCookie)
                     // 1. 升级 User-Agent (使用最新的 Chrome 标识)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("User-Agent", UserAgentUtil.random())
                     // 2. 动态 Referer (必须指向商品详情页)
                     .header("Referer", "https://buff.163.com/goods/" + goodsId)
                     // 3. 标记 AJAX 请求 (老生常谈，但必须有)
@@ -194,7 +195,7 @@ public class BuffStrategy implements MarketStrategy {
 
                 HttpRequest request = HttpRequest.get(url)
                         .header("Cookie", buffCookie)
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...") // 记得用全套 Header
+                        .header("User-Agent", UserAgentUtil.random()) // 记得用全套 Header
                         .header("Referer", "https://buff.163.com/market/")
                         .header("X-Requested-With", "XMLHttpRequest")
                         .header("Accept", "application/json, text/javascript, */*; q=0.01")

@@ -9,6 +9,7 @@ import cn.hutool.json.JSONUtil;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
+import com.zan.csgo.utils.UserAgentUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -90,7 +91,7 @@ public class YoupinStrategy implements MarketStrategy {
                     .header("platform", "pc")
                     .header("appType", "1")
                     // --- 浏览器伪装 ---
-                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
+                    .header("User-Agent", UserAgentUtil.random())
                     .header("Origin", "https://youpin898.com")
                     .header("Referer", "https://youpin898.com/")
                     .header("Content-Type", "application/json")

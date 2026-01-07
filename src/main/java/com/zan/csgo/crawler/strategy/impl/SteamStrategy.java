@@ -11,6 +11,7 @@ import cn.hutool.json.JSONUtil;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
+import com.zan.csgo.utils.UserAgentUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -48,7 +49,7 @@ public class SteamStrategy implements MarketStrategy {
 
         try {
             HttpRequest request = HttpRequest.get(url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("User-Agent", UserAgentUtil.random())
                     .header("Accept-Language", "zh-CN,zh;q=0.9")
                     .timeout(10000);
 
