@@ -1,6 +1,7 @@
 package com.zan.csgo.service.impl;
 
-import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.crawler.strategy.MarketStrategyFactory;
 import com.zan.csgo.enums.PlatformEnum;
@@ -17,9 +18,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * @Author Zan
@@ -46,206 +50,215 @@ public class SkinMonitorService implements ISkinMonitorService {
     @Transactional(rollbackFor = Exception.class)
     @Override
     public SkinMonitorVO monitorSkin(Long skinId) {
-        // 1. 从数据库查询饰品基础信息
+        // 1. 基础校验
         SkinItemEntity item = skinItemService.getById(skinId);
         if (item == null) {
             log.warn("ID: {} 对应的饰品不存在", skinId);
-            return null; // 或者抛出自定义业务异常
+            return null;
         }
 
-        // 2. 准备结果容器 (Key=平台名, Value=价格信息)
+        // 2. 结果容器
         Map<String, PlatformPriceVO> resultMap = new HashMap<>();
 
-        // 模块一：执行 Buff 监控逻辑
-        try {
-            // 1.1 从工厂获取 Buff 策略
-            MarketStrategy buffStrategy = strategyFactory.getStrategy(PlatformEnum.BUFF.getName());
+        // =======================================================
+        // 模块一：Buff (核心风向标)
+        // =======================================================
+        // 策略：有ID用ID查，无ID用名字搜
+        Object buffKey = (item.getBuffGoodsId() != null && item.getBuffGoodsId() > 0)
+                ? item.getBuffGoodsId()
+                : item.getSkinMarketHashName();
 
-            // 1.2 智能决定参数 (有 ID 传 ID，没 ID 传 HashName)
-            Object buffKey;
-            Long currentDbId = item.getBuffGoodsId();
-            if (ObjectUtil.isNotNull(currentDbId) && currentDbId > 0) {
-                buffKey = currentDbId; // 性能模式：直接 ID 查价
-            } else {
-                buffKey = item.getSkinMarketHashName(); // 初始化模式：搜索查价
-            }
+        PlatformPriceVO buffVO = executeStrategy(PlatformEnum.BUFF, buffKey, item, (result) -> {
+            // Buff 特有逻辑：ID自学习回填
+            updateSkinIdIfChanged(item, "buff_goods_id", result.getTargetId());
+        });
+        resultMap.put(PlatformEnum.BUFF.getName(), buffVO);
 
-            // 1.3 执行抓取
-            PriceFetchResultDTO buffResult = buffStrategy.fetchPrice(buffKey);
 
-            // 1.4 处理 Buff 结果 (入库 + ID 自学习)
-            PlatformPriceVO buffVO = handleBuffResult(item, buffResult);
+        // =======================================================
+        // 模块二：Steam (基准价格)
+        // =======================================================
+        // 策略：始终用 HashName 查
+        PlatformPriceVO steamVO = executeStrategy(PlatformEnum.STEAM, item.getSkinMarketHashName(), item, null);
+        resultMap.put(PlatformEnum.STEAM.getName(), steamVO);
 
-            // 1.5 放入结果集
-            resultMap.put(PlatformEnum.BUFF.getName(), buffVO);
 
-        } catch (Exception e) {
-            log.error("Buff 监控任务异常", e);
-            resultMap.put(PlatformEnum.BUFF.getName(), PlatformPriceVO.builder()
-                    .platform(PlatformEnum.BUFF.getName())
+        // =======================================================
+        // 模块三：悠悠有品 (Youpin)
+        // =======================================================
+        // 策略：只允许用 ID 查 (PC接口限制)
+        if (item.getYoupinId() != null && item.getYoupinId() > 0) {
+            PlatformPriceVO youpinVO = executeStrategy(PlatformEnum.YOUPIN, item.getYoupinId(), item, null);
+            resultMap.put(PlatformEnum.YOUPIN.getName(), youpinVO);
+        } else {
+            // 无 ID 时的降级处理
+            resultMap.put(PlatformEnum.YOUPIN.getName(), PlatformPriceVO.builder()
+                    .platform(PlatformEnum.YOUPIN.getName())
                     .success(false)
-                    .statusMsg("系统异常: " + e.getMessage())
+                    .statusMsg("未关联ID(请同步字典)")
                     .build());
         }
 
-        // 模块二：执行 Steam 监控逻辑
-        processPlatform(item, PlatformEnum.STEAM.getName(), item.getSkinMarketHashName(), resultMap);
-
-        // 模块三：执行 悠悠有品 监控逻辑
-        try {
-            Long youpinId = item.getYoupinId();
-            if (youpinId != null && youpinId > 0) {
-                // 有 ID，直接走 PC 接口查价
-                MarketStrategy youpinStrategy = strategyFactory.getStrategy(PlatformEnum.YOUPIN.getName());
-                PriceFetchResultDTO youpinRes = youpinStrategy.fetchPrice(youpinId);
-                resultMap.put(PlatformEnum.YOUPIN.getName(), handlePlatformResult(item, youpinRes, PlatformEnum.YOUPIN.getName()));
-            } else {
-                // 无 ID，返回提示状态，引导用户去同步字典
-                PlatformPriceVO failVO = PlatformPriceVO.builder()
-                        .platform(PlatformEnum.YOUPIN.getName())
-                        .success(false)
-                        .statusMsg("未关联ID")
-                        .build();
-                resultMap.put(PlatformEnum.YOUPIN.getName(), failVO);
-            }
-        } catch (Exception e) {
-            log.error("Youpin 监控异常", e);
-            PlatformPriceVO failVO = PlatformPriceVO.builder()
-                    .platform(PlatformEnum.YOUPIN.getName())
-                    .success(false)
-                    .statusMsg("系统异常")
-                    .build();
-            resultMap.put(PlatformEnum.YOUPIN.getName(), failVO);
-        }
-
         // =======================================================
-        // 3. 组装最终的大 VO 返回给前端
+        // 3. 组装最终返回
         // =======================================================
         return SkinMonitorVO.builder()
                 .skinId(item.getId())
                 .skinName(item.getSkinName())
-                .imageUrl(item.getSkinImageUrl())          // 假设实体类有这个字段
+                .imageUrl(item.getSkinImageUrl())
                 .marketHashName(item.getSkinMarketHashName())
-                .priceMap(resultMap)                       // 放入各平台数据
+                .priceMap(resultMap)
                 .build();
     }
 
     /**
-     * 私有辅助方法：处理 Buff 的复杂逻辑 (价格入库 + ID自学习)
+     * 🔥 核心通用的策略执行器
+     *
+     * @param platform   平台枚举
+     * @param searchKey  查询Key (可能是ID，也可能是名字)
+     * @param item       饰品实体
+     * @param onSuccess  成功后的回调 (用于处理各平台特有的逻辑，如ID回填)
      */
-    private PlatformPriceVO handleBuffResult(SkinItemEntity item, PriceFetchResultDTO result) {
-        String statusMsg = "";
-        String targetIdStr = null;
-
-        if (result.isSuccess()) {
-            // A. 保存价格历史
-            savePriceHistory(item.getId(), "BUFF", result);
-
-            // B. 处理 ID 自学习 (核心逻辑)
-            if (result.getTargetId() != null) {
-                // 安全转换为 long (防止 Integer/Long 类型不一致报错)
-                long fetchedId = Long.parseLong(result.getTargetId().toString());
-                targetIdStr = String.valueOf(fetchedId);
-
-                Long currentDbId = item.getBuffGoodsId();
-
-                // 如果数据库是空的，或者 ID 变了 -> 执行更新
-                if (currentDbId == null || currentDbId != fetchedId) {
-                    item.setBuffGoodsId(fetchedId);
-                    boolean b = skinItemService.fillBuffGoodsIdAndYoupinId(item);
-                    if (b) {
-                        statusMsg = "映射建立成功，价格已更新";
-                        log.info(">>> [自学习] 饰品 [{}] 更新 BuffID 成功: {}", item.getSkinName(), fetchedId);
-                    } else {
-                        log.warn(">>> [自学习] 饰品 [{}] 更新 BuffID 失败", item.getSkinName());
-                    }
-                } else {
-                    statusMsg = "价格刷新成功";
-                }
-            } else {
-                statusMsg = "价格刷新成功(未返回ID)";
-            }
-        } else {
-            statusMsg = "抓取失败: " + result.getErrorMsg();
-        }
-
-        // C. 构建并返回 Buff 的 VO
-        return PlatformPriceVO.builder()
-                .platform("BUFF")
-                .success(result.isSuccess())
-                .price(result.getPrice())
-                .volume(result.getVolume())
-                .targetId(targetIdStr) // 返回给前端 ID，方便做跳转链接
-                .statusMsg(statusMsg)
-                .build();
-    }
-
-    /**
-     * 通用平台处理方法 (Steam, C5, IGXE 等通用逻辑)
-     */
-    private void processPlatform(SkinItemEntity item, String platformName, Object key, Map<String, PlatformPriceVO> resultMap) {
+    private PlatformPriceVO executeStrategy(PlatformEnum platform, Object searchKey, SkinItemEntity item, Consumer<PriceFetchResultDTO> onSuccess) {
+        String platformName = platform.getName();
         try {
-            // 从工厂获取 Steam / C5 / IGXE 策略
             MarketStrategy strategy = strategyFactory.getStrategy(platformName);
+            PriceFetchResultDTO result = strategy.fetchPrice(searchKey);
 
-            // 执行抓取 (Steam 只需要 HashName)
-            PriceFetchResultDTO result = strategy.fetchPrice(key);
-
-            // 如果成功，保存历史价格
             if (result.isSuccess()) {
+                // 1. 计算涨跌幅 & 报警 (必须在入库前做)
+                PlatformPriceVO vo = calculateTrendAndBuildVO(item, result, platformName);
+
+                // 2. 执行回调 (如更新 ID)
+                if (onSuccess != null) {
+                    onSuccess.accept(result);
+                }
+
+                // 3. 入库保存历史记录
                 savePriceHistory(item.getId(), platformName, result);
 
-                // 如果是 Youpin/C5 返回了 ID，这里可以像 Buff 那样做自学习入库逻辑
-                // updatePlatformId(item, platformName, result.getTargetId());
+                return vo;
+            } else {
+                return PlatformPriceVO.builder()
+                        .platform(platformName)
+                        .success(false)
+                        .statusMsg(result.getErrorMsg())
+                        .build();
             }
-
-            // 构建 Steam 的 VO
-            resultMap.put(platformName, PlatformPriceVO.builder()
-                    .platform(platformName)
-                    .success(result.isSuccess())
-                    .price(result.getPrice())
-                    .volume(result.getVolume())
-                    .statusMsg(result.isSuccess() ? "更新成功" : result.getErrorMsg())
-                    .targetId(result.getTargetId() != null ? result.getTargetId().toString() : null)
-                    .build());
-
         } catch (Exception e) {
             log.error("{} 监控异常", platformName, e);
-            resultMap.put(platformName, PlatformPriceVO.builder().success(false).statusMsg("跳过").build());
+            return PlatformPriceVO.builder()
+                    .platform(platformName)
+                    .success(false)
+                    .statusMsg("系统异常")
+                    .build();
         }
     }
 
     /**
-     * 通用处理：保存历史价格 + 构建 VO
+     * 计算涨跌幅并构建 VO
      */
-    private PlatformPriceVO handlePlatformResult(SkinItemEntity item, PriceFetchResultDTO result, String platform) {
-        if (result.isSuccess()) {
-            // 异步或同步保存价格历史 (建议量大时用消息队列)
-            savePriceHistory(item.getId(), platform, result);
+    private PlatformPriceVO calculateTrendAndBuildVO(SkinItemEntity item, PriceFetchResultDTO result, String platform) {
+        BigDecimal currentPrice = result.getPrice();
+
+        // 1. 查数据库获取基准价格
+        SkinPriceHistoryEntity history24h = priceHistoryMapper.selectPrice1MinAgo(item.getId(), platform);
+        SkinPriceHistoryEntity historyLast = priceHistoryMapper.selectLatestPrice(item.getId(), platform);
+
+        String changeRateStr = "-";
+        String changeTag = "";
+
+        // 2. 计算日涨跌幅 (vs 1min前)
+        if (history24h != null && history24h.getPrice().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal oldPrice = history24h.getPrice();
+            BigDecimal diff = currentPrice.subtract(oldPrice);
+            // 结果保留4位小数 (0.1234)
+            BigDecimal rate = diff.divide(oldPrice, 4, RoundingMode.HALF_UP);
+            // 转百分比 (12.34)
+            BigDecimal percent = rate.multiply(new BigDecimal(100)).setScale(2, RoundingMode.HALF_UP);
+
+            if (percent.compareTo(BigDecimal.ZERO) > 0) {
+                changeRateStr = "+" + percent + "%";
+                if (percent.doubleValue() > 10.0) changeTag = "🔥 暴涨";
+                else if (percent.doubleValue() > 5.0) changeTag = "📈 大涨";
+            } else if (percent.compareTo(BigDecimal.ZERO) < 0) {
+                changeRateStr = percent + "%";
+                if (percent.doubleValue() < -10.0) changeTag = "💸 暴跌";
+                else if (percent.doubleValue() < -5.0) changeTag = "📉 大跌";
+            } else {
+                changeRateStr = "0.00%";
+            }
+        }
+
+        // 3. 瞬时波动报警 (vs 上一次)
+        if (historyLast != null && historyLast.getPrice().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal lastPrice = historyLast.getPrice();
+            BigDecimal jumpRate = currentPrice.subtract(lastPrice).divide(lastPrice, 4, RoundingMode.HALF_UP).abs();
+
+            if (jumpRate.doubleValue() > 0.05) { // 波动 > 5%
+                log.warn("🚨 [价格异动] {} - {} : {} -> {}", item.getSkinName(), platform, lastPrice, currentPrice);
+                // todo: 发送钉钉/飞书通知
+            }
         }
 
         return PlatformPriceVO.builder()
                 .platform(platform)
-                .success(result.isSuccess())
-                .price(result.getPrice())
+                .success(true)
+                .price(currentPrice)
                 .volume(result.getVolume())
+                .changeRate(changeRateStr)
+                .changeMsg(changeTag)
                 .targetId(result.getTargetId() != null ? result.getTargetId().toString() : null)
-                .statusMsg(result.isSuccess() ? "更新成功" : result.getErrorMsg())
+                .statusMsg("更新成功")
                 .build();
     }
 
     /**
-     * 私有辅助方法：通用价格入库逻辑
+     * 通用 ID 回填逻辑 (仅当 ID 变化时才更新数据库)
+     */
+    private void updateSkinIdIfChanged(SkinItemEntity item, String dbColumnName, Object newIdObj) {
+        if (newIdObj == null) return;
+
+        try {
+            long newId = Long.parseLong(newIdObj.toString());
+            Long oldId = null;
+
+            if ("buff_goods_id".equals(dbColumnName)) {
+                oldId = item.getBuffGoodsId();
+            } else if ("youpin_id".equals(dbColumnName)) {
+                oldId = item.getYoupinId();
+            }
+
+            // 如果 ID 变了 (或者原来没有)，才执行 SQL
+            if (oldId == null || oldId != newId) {
+                skinItemService.update(null, new LambdaUpdateWrapper<SkinItemEntity>()
+                        .eq(SkinItemEntity::getId, item.getId())
+                        .set(StrUtil.equals(dbColumnName, "buff_goods_id"), SkinItemEntity::getBuffGoodsId, newId)
+                        .set(StrUtil.equals(dbColumnName, "youpin_id"), SkinItemEntity::getYoupinId, (int) newId)
+                );
+
+                // 更新内存中的对象，保证后续流程使用的是最新 ID
+                if ("buff_goods_id".equals(dbColumnName)) {
+                    item.setBuffGoodsId(newId);
+                }
+
+                log.info(">>> [自学习] 饰品 [{}] 更新 {} -> {}", item.getSkinName(), dbColumnName, newId);
+            }
+        } catch (Exception e) {
+            log.warn("ID回填失败", e);
+        }
+    }
+
+    /**
+     * 基础入库方法
      */
     private void savePriceHistory(Long skinId, String platform, PriceFetchResultDTO result) {
         SkinPriceHistoryEntity history = new SkinPriceHistoryEntity();
         history.setSkinId(skinId);
-        history.setPlatform(platform); // BUFF 或 STEAM
+        history.setPlatform(platform);
         history.setPrice(result.getPrice());
         history.setVolume(result.getVolume());
         history.setCreatedAt(LocalDateTime.now());
-
-        // 插入数据库
         priceHistoryMapper.insert(history);
     }
 }

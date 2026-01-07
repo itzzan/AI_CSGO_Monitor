@@ -44,4 +44,14 @@ public class PlatformPriceVO {
      * 用于前端跳转链接
      */
     private String targetId;
+
+    /**
+     * 涨跌幅 (字符串, 如 "+5.20%")
+     */
+    private String changeRate;
+
+    /**
+     * 涨跌提示 (如 "🔥 暴涨")
+     */
+    private String changeMsg;
 }

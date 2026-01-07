@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS `skin_item`
 -- 2.2 饰品价格历史表 (核心时序表)
 CREATE TABLE IF NOT EXISTS `skin_price_history`
 (
-    `id`              BIGINT              NOT NULL AUTO_INCREMENT,
+    `id`              BIGINT              NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `skin_id`         BIGINT              NOT NULL DEFAULT 0 COMMENT '对应 skin_item 表的 id',
     `platform`        VARCHAR(20)         NOT NULL DEFAULT '' COMMENT '平台：STEAM, BUFF, IGXE',
 
