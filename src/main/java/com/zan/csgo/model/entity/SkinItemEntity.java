@@ -93,6 +93,12 @@ public class SkinItemEntity implements Serializable {
     private Integer isStar;
 
     /**
+     * Buff商品ID
+     */
+    @TableField("buff_goods_id")
+    private Long buffGoodsId;
+
+    /**
      * 版本号
      */
     @Version

@@ -12,4 +12,6 @@ import com.zan.csgo.model.entity.SkinItemEntity;
 public interface ISkinItemService extends IService<SkinItemEntity> {
 
     SkinItemEntity querySkinItemByItemId(Long skinItemId);
+
+    void fillBuffGoodsId(SkinItemEntity item);
 }

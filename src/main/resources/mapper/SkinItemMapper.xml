@@ -16,6 +16,7 @@
         <result column="is_stattrak" property="isStattrak" />
         <result column="is_souvenir" property="isSouvenir" />
         <result column="is_star" property="isStar" />
+        <result column="buff_goods_id" property="buffGoodsId" />
         <result column="version" property="version" />
         <result column="created_by" property="createdBy" />
         <result column="created_at" property="createdAt" />
@@ -27,7 +28,7 @@
     <!-- 通用查询结果列 -->
     <sql id="Base_Column_List">
         id, skin_item_id, skin_market_hash_name, skin_name, skin_category, skin_weapon,
-        skin_pattern, skin_exterior, skin_rarity, skin_image_url, is_stattrak, is_souvenir, is_star
+        skin_pattern, skin_exterior, skin_rarity, skin_image_url, is_stattrak, is_souvenir, is_star, buff_goods_id
         version, created_by, created_at, changed_by, changed_at, del_flag
     </sql>
 

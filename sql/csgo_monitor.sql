@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS `skin_item`
     `is_souvenir`           TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 COMMENT '是否纪念品',
     `is_star`               TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 COMMENT '是否带星标(★)，通常为刀/手套',
 
+    -- 额外信息
+    `buff_goods_id`         BIGINT              NOT NULL DEFAULT 0 COMMENT 'Buff 商品ID',
+
     -- 审计字段
     `version`               INT UNSIGNED        NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `created_by`            BIGINT              NOT NULL DEFAULT 0 COMMENT '创建人',
