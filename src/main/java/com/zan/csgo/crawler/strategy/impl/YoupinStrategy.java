@@ -2,6 +2,7 @@ package com.zan.csgo.crawler.strategy.impl;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpRequest;
+import cn.hutool.http.HttpResponse;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
@@ -50,7 +51,12 @@ public class YoupinStrategy implements MarketStrategy {
     public PriceFetchResultDTO fetchPrice(Object key) {
         // 1. 严格校验：只接受 ID
         if (!(key instanceof Long)) {
-            return PriceFetchResultDTO.fail(getPlatformName(), "无ID(请同步字典)");
+            // 兼容 Integer 转 Long (防止类型转换报错)
+            if (key instanceof Integer) {
+                key = ((Integer) key).longValue();
+            } else {
+                return PriceFetchResultDTO.fail(getPlatformName(), "无ID(请同步字典)");
+            }
         }
 
         Long templateId = (Long) key;
@@ -59,20 +65,20 @@ public class YoupinStrategy implements MarketStrategy {
         log.info(">>> 开始抓取 悠悠有品 价格 (ID: {})", templateId);
 
         try {
-            // 2. 构造 Body (参考你的 curl data-raw)
+            // 2. 构造 Body
             Map<String, Object> paramMap = new HashMap<>();
             paramMap.put("gameId", "730");
             paramMap.put("templateId", templateId.toString());
-            paramMap.put("listType", "10");     // 列表类型
-            paramMap.put("listSortType", "1");  // 关键！1=价格升序，确保我们拿到的是最低价
+            paramMap.put("listType", "10");
+            paramMap.put("listSortType", "1");
             paramMap.put("sortType", "0");
             paramMap.put("pageIndex", "1");
-            paramMap.put("pageSize", "10");     // 我们只需要最低价，取前10个够了
+            paramMap.put("pageSize", "10");
 
             String jsonBody = JSONUtil.toJsonStr(paramMap);
 
-            // 3. 发送请求 (完整复刻浏览器 Header)
-            String res = HttpRequest.post(YouPinPriceApiUrl)
+            // 3. 发送请求
+            HttpRequest request = HttpRequest.post(YouPinPriceApiUrl)
                     .body(jsonBody)
                     // --- 核心鉴权 ---
                     .header("authorization", YouPinAuthorization)
@@ -90,81 +96,91 @@ public class YoupinStrategy implements MarketStrategy {
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json, text/plain, */*")
                     .header("secret-v", "h5_v1")
-                    .timeout(8000)
-                    .execute().body();
+                    .timeout(8000);
 
-            // 4. 响应校验
-            if (StrUtil.isBlank(res)) {
-                return PriceFetchResultDTO.fail(getPlatformName(), "接口无响应");
-            }
+            // 🔥 使用 HttpResponse 获取完整响应信息
+            try (HttpResponse response = request.execute()) {
 
-            JSONObject json = JSONUtil.parseObj(res);
+                // A. 检查状态码
+                int status = response.getStatus();
+                if (status != 200) {
+                    log.warn("❌ [悠悠有品] HTTP状态异常 ID:{} Code:{}", templateId, status);
+                    if (status == 429 || status == 403) {
+                        return PriceFetchResultDTO.fail(getPlatformName(), "触发限流/WAF拦截 (" + status + ")");
+                    }
+                    return PriceFetchResultDTO.fail(getPlatformName(), "HTTP错误:" + status);
+                }
 
-            // 5. 解析数据
-            Integer code = json.getInt("Code");
-            if (code == null) code = json.getInt("code"); // 兼容小写
+                String res = response.body();
 
-            if (code != null && code == 0) {
-                // ==========================================================
-                // 核心解析逻辑 (基于你提供的 JSON)
-                // ==========================================================
+                // B. 检查响应是否为空
+                if (StrUtil.isBlank(res)) {
+                    return PriceFetchResultDTO.fail(getPlatformName(), "接口无响应");
+                }
 
-                // 2. 安全获取 Data 字段 (避免强转报错)
-                Object dataObj = json.get("Data");
-                if (dataObj == null) dataObj = json.get("data");
+                // C. 🔥 核心防御：检查是否为 JSON 格式
+                // 如果返回的是 <html>...</html>，这里直接拦截，防止报 JSONException
+                if (!StrUtil.startWith(res.trim(), "{")) {
+                    String preview = StrUtil.sub(res, 0, 200).replace("\n", "");
+                    log.error("❌ [悠悠有品] 返回了 HTML 非 JSON (可能是被拦截): {}", preview);
+                    return PriceFetchResultDTO.fail(getPlatformName(), "被拦截/返回HTML");
+                }
 
-                JSONArray items = null;
-                if (dataObj instanceof JSONArray) {
-                    items = (JSONArray) dataObj; // 正常情况：Data 是数组
+                // 4. 解析 JSON
+                JSONObject json = JSONUtil.parseObj(res);
+
+                // 5. 业务 Code 校验
+                Integer code = json.getInt("Code");
+                if (code == null) code = json.getInt("code");
+
+                if (code != null && code == 0) {
+                    // 解析 Data
+                    Object dataObj = json.get("Data");
+                    if (dataObj == null) dataObj = json.get("data");
+
+                    JSONArray items = null;
+                    if (dataObj instanceof JSONArray) {
+                        items = (JSONArray) dataObj;
+                    } else {
+                        // 如果 Data 是对象或其他，可能是详情页接口的数据结构，说明URL可能配错了，或者该ID没有挂单列表
+                        log.warn("⚠️ [悠悠有品] ID:{} Data 类型不符: {}", templateId, dataObj != null ? dataObj.getClass().getSimpleName() : "null");
+                    }
+
+                    // 提取总数
+                    Integer totalCount = json.getInt("TotalCount");
+                    if (totalCount == null) totalCount = json.getInt("totalCount");
+
+                    if (items != null && !items.isEmpty()) {
+                        JSONObject cheapestItem = items.getJSONObject(0);
+                        BigDecimal price = cheapestItem.getBigDecimal("price");
+                        if (totalCount == null) totalCount = items.size();
+
+                        long cost = System.currentTimeMillis() - startTime;
+                        log.info("✅ [悠悠有品] 抓取成功 ID:{} -> ¥{} (在售:{}) 耗时:{}ms", templateId, price, totalCount, cost);
+
+                        return PriceFetchResultDTO.builder()
+                                .success(true)
+                                .platform(getPlatformName())
+                                .price(price)
+                                .volume(totalCount)
+                                .targetId(templateId.toString())
+                                .build();
+                    } else {
+                        return PriceFetchResultDTO.fail(getPlatformName(), "暂无在售");
+                    }
                 } else {
-                    // 异常情况：Data 可能是 null 或者是空对象 {}
-                    log.warn("⚠️ [悠悠有品] ID:{} 返回的 Data 不是数组类型: {}", templateId, dataObj != null ? dataObj.getClass().getSimpleName() : "null");
+                    // 业务错误 (如 401 Token过期)
+                    String msg = json.getStr("Msg");
+                    if (msg == null) {
+                        msg = json.getStr("msg");
+                    }
+                    log.error("❌ [悠悠有品] API业务错误 ID:{}, Msg:{}", templateId, msg);
+                    return PriceFetchResultDTO.fail(getPlatformName(), "API拒绝:" + msg);
                 }
-
-                // 3. 获取总数 (TotalCount 在根节点)
-                Integer totalCount = json.getInt("TotalCount");
-                if (totalCount == null) totalCount = json.getInt("totalCount");
-
-                // 4. 提取价格
-                if (items != null && !items.isEmpty()) {
-                    // 取第一个 (因为 listSortType=1，所以是最低价)
-                    JSONObject cheapestItem = items.getJSONObject(0);
-
-                    // 价格字段 (JSON里是字符串 "31.47")
-                    BigDecimal price = cheapestItem.getBigDecimal("price");
-
-                    // 兜底总数
-                    if (totalCount == null) totalCount = items.size();
-
-                    long cost = System.currentTimeMillis() - startTime;
-                    log.info("✅ [悠悠有品] 抓取成功 ID:{} -> 最低价: ¥{} (在售:{}) 耗时:{}ms",
-                            templateId, price, totalCount, cost);
-
-                    return PriceFetchResultDTO.builder()
-                            .success(true)
-                            .platform(getPlatformName())
-                            .price(price)
-                            .volume(totalCount)
-                            .targetId(templateId.toString())
-                            .build();
-                } else {
-                    return PriceFetchResultDTO.fail(getPlatformName(), "暂无在售");
-                }
-
-            } else {
-                // 错误处理
-                String msg = json.getStr("Msg");
-                if (msg == null) msg = json.getStr("msg");
-
-                if (code != null && code == 401) {
-                    return PriceFetchResultDTO.fail(getPlatformName(), "Token过期");
-                }
-                log.error("❌ [悠悠有品] API错误 ID: {}, Msg: {}", templateId, msg);
-                return PriceFetchResultDTO.fail(getPlatformName(), "API错误: " + msg);
             }
 
         } catch (Exception e) {
-            log.error("❌ [悠悠有品] 系统异常 ID: " + templateId, e);
+            log.error("❌ [悠悠有品] 系统异常 ID:" + templateId, e);
             return PriceFetchResultDTO.fail(getPlatformName(), "系统异常");
         }
     }

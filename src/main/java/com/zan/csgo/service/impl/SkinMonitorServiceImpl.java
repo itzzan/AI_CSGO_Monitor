@@ -83,8 +83,9 @@ public class SkinMonitorServiceImpl implements ISkinMonitorService {
         // 模块二：Steam (基准价格)
         // =======================================================
         // 策略：始终用 HashName 查
-        PlatformPriceVO steamVO = executeStrategy(PlatformEnum.STEAM, item.getSkinMarketHashName(), item, null);
-        resultMap.put(PlatformEnum.STEAM.getName(), steamVO);
+        // todo Steam限流比较严重，可以不查，而且Steam比较贵 ，暂不考虑
+        //PlatformPriceVO steamVO = executeStrategy(PlatformEnum.STEAM, item.getSkinMarketHashName(), item, null);
+        //resultMap.put(PlatformEnum.STEAM.getName(), steamVO);
 
 
         // =======================================================
