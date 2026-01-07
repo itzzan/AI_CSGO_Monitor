@@ -9,6 +9,7 @@ import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -25,8 +26,20 @@ import java.util.Map;
 @Slf4j
 public class YoupinStrategy implements MarketStrategy {
 
-    // 你抓包获取的 PC 端接口
-    private static final String PC_API_URL = "https://api.youpin898.com/api/homepage/pc/goods/market/queryOnSaleCommodityList";
+    @Value("${csgo.monitor.youpin.price-api-url}")
+    private String YouPinPriceApiUrl;
+
+    @Value("${csgo.monitor.youpin.authorization}")
+    private String YouPinAuthorization;
+
+    @Value("${csgo.monitor.youpin.deviceId}")
+    private String YouPinDeviceId;
+
+    @Value("${csgo.monitor.youpin.uk}")
+    private String YouPinUk;
+
+    @Value("${csgo.monitor.youpin.app-version}")
+    private String YouPinAppVersion;
 
     @Override
     public String getPlatformName() {
@@ -57,15 +70,15 @@ public class YoupinStrategy implements MarketStrategy {
             String jsonBody = JSONUtil.toJsonStr(paramMap);
 
             // 3. 发送请求 (完整复刻浏览器 Header)
-            String res = HttpRequest.post(PC_API_URL)
+            String res = HttpRequest.post(YouPinPriceApiUrl)
                     .body(jsonBody)
                     // --- 核心鉴权 ---
-                    .header("authorization", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4Y2NjYmU3YjhkMGI0Y2QzOWJmOTUwMzQxMDYwODZjMyIsIm5hbWVpZCI6IjUwMjI5NjkiLCJJZCI6IjUwMjI5NjkiLCJ1bmlxdWVfbmFtZSI6IllQMDAwNTAyMjk2OSIsIk5hbWUiOiJZUDAwMDUwMjI5NjkiLCJuYmYiOjE3Njc3NjU3MTQsImV4cCI6MTc2ODYyOTcxNCwiaXNzIjoieW91cGluODk4LmNvbSIsInZlcnNpb24iOiJBT3giLCJkZXZpY2VJZCI6IjE1ZjgyZGJiLTQ2YWMtNDYyYi05YzQ0LTg5NDljNWJhMTM0MyIsImF1ZCI6InVzZXIifQ.SlbnVNaEdqXGdW-U2-pAIfVvISQd9eZydj7o3XRXyzM")
-                    .header("deviceId", "15f82dbb-46ac-462b-9c44-8949c5ba1343")
-                    .header("uk", "5HoJYNUQLh1bAEdaAoJ1ZVXp3H98riajnYsrC1oCyom1PDaSi2dl9tuY3PovUz71K")
+                    .header("authorization", YouPinAuthorization)
+                    .header("deviceId", YouPinDeviceId)
+                    .header("uk", YouPinUk)
                     // --- 业务标识 ---
-                    .header("App-Version", "5.26.0")
-                    .header("AppVersion", "5.26.0")
+                    .header("App-Version", YouPinAppVersion)
+                    .header("AppVersion", YouPinAppVersion)
                     .header("platform", "pc")
                     .header("appType", "1")
                     // --- 浏览器伪装 ---

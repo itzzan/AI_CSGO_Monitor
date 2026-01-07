@@ -12,6 +12,7 @@ import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -26,14 +27,14 @@ import java.math.BigDecimal;
 @Component
 public class BuffStrategy implements MarketStrategy {
 
-    // ⚠️ 请务必定期更新此 Cookie，否则会报 Redirecting... 或 Login Required
-    private static final String BUFF_COOKIE = "请务必定期更新此 Cookie";
+    @Value("${csgo.monitor.buff.cookie}")
+    private String buffCookie;
 
-    // 价格接口 (参数: goods_id)
-    private static final String BUFF_PRICE_API = "https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&page_size=500&sort_by=default&mode=&allow_tradable_cooldown=1&goods_id=";
+    @Value("${csgo.monitor.buff.price-api-url}")
+    private String buffPriceApiUrl;
 
-    // 搜索接口 (参数: search)
-    private static final String BUFF_SEARCH_API = "https://buff.163.com/api/market/goods?game=csgo&page_size=80&search=";
+    @Value("${csgo.monitor.buff.search-api-url}")
+    private String buffSearchApiUrl;
 
     @Override
     public String getPlatformName() {
@@ -79,15 +80,15 @@ public class BuffStrategy implements MarketStrategy {
         log.info(">>> 开始抓取 Buff 价格 (ID: {})", goodsId);
 
         // 拼接 URL (注意：BUFF_PRICE_URL 末尾应该是 &goods_id=)
-        String url = BUFF_PRICE_API + goodsId;
+        String url = String.format(buffPriceApiUrl, goodsId);
 
         try {
             // 2. 提取 CSRF Token (这是 Buff API 成功的关键)
-            String csrfToken = extractCsrfToken(BUFF_COOKIE);
+            String csrfToken = extractCsrfToken(buffCookie);
 
             // 3. 构造请求 (Header 是核心！)
             HttpRequest request = HttpRequest.get(url)
-                    .header("Cookie", BUFF_COOKIE)
+                    .header("Cookie", buffCookie)
                     // 1. 升级 User-Agent (使用最新的 Chrome 标识)
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                     // 2. 动态 Referer (必须指向商品详情页)
@@ -185,14 +186,14 @@ public class BuffStrategy implements MarketStrategy {
 
         while (page <= maxPage) {
             // 1. 拼接分页参数 (&page_num=1, &page_num=2 ...)
-            String url = BUFF_SEARCH_API + HttpUtil.encodeParams(marketHashName, null) + "&page_num=" + page;
+            String url = String.format(buffSearchApiUrl, HttpUtil.encodeParams(marketHashName, null), page);
 
             try {
                 // 2. 提取 CSRF (只需提取一次，这里简化逻辑每次都提也无所谓)
-                String csrfToken = extractCsrfToken(BUFF_COOKIE);
+                String csrfToken = extractCsrfToken(buffCookie);
 
                 HttpRequest request = HttpRequest.get(url)
-                        .header("Cookie", BUFF_COOKIE)
+                        .header("Cookie", buffCookie)
                         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...") // 记得用全套 Header
                         .header("Referer", "https://buff.163.com/market/")
                         .header("X-Requested-With", "XMLHttpRequest")
