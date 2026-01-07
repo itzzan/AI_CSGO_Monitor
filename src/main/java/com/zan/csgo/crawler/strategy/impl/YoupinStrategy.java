@@ -56,6 +56,8 @@ public class YoupinStrategy implements MarketStrategy {
         Long templateId = (Long) key;
         long startTime = System.currentTimeMillis();
 
+        log.info(">>> 开始抓取 悠悠有品 价格 (ID: {})", templateId);
+
         try {
             // 2. 构造 Body (参考你的 curl data-raw)
             Map<String, Object> paramMap = new HashMap<>();
