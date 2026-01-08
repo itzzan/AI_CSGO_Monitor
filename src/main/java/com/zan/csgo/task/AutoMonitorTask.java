@@ -6,6 +6,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zan.csgo.enums.DelFlagEnum;
+import com.zan.csgo.enums.SkinPriorityEnum;
 import com.zan.csgo.mapper.SkinItemMapper;
 import com.zan.csgo.model.entity.SkinItemEntity;
 import com.zan.csgo.service.ISkinMonitorService;
@@ -48,47 +49,43 @@ public class AutoMonitorTask {
     private volatile boolean isCoolingDown = false;
 
     /**
-     * 【主任务】每隔 15 分钟执行一次全量扫描
+     * 🔥 热门队列：每 5 分钟执行一次 (只扫 priority = 1 的)
      */
-    @Scheduled(fixedDelay = 900000)
-    public void startBatchMonitor() {
-        // 1. 熔断检查
-        if (isCoolingDown) {
-            log.warn("❄️ [熔断保护中] 跳过本次全量扫描，等待系统冷却...");
-            return;
-        }
-
-        log.info("⏰ [全量监控] 任务开始 (单线程 + 代理池模式)...");
-
-        // 2. 查询数据库 (排除已删除、排除没有关联ID的数据)
-        List<SkinItemEntity> skinList = skinItemMapper.selectList(
+    @Scheduled(fixedDelay = 300000) // 5分钟
+    public void monitorHotItems() {
+        log.info("🔥 [热门监控] 开始扫描重点饰品...");
+        List<SkinItemEntity> hotList = skinItemMapper.selectList(
                 new LambdaQueryWrapper<SkinItemEntity>()
                         .eq(SkinItemEntity::getDelFlag, DelFlagEnum.NO.getValue())
-                        .and(qw -> qw
-                                .ne(SkinItemEntity::getBuffGoodsId, 0)
-                                .or()
-                                .ne(SkinItemEntity::getYoupinId, 0))
-                        .select(SkinItemEntity::getId, SkinItemEntity::getSkinName)
+                        .eq(SkinItemEntity::getSkinPriority, SkinPriorityEnum.HOT.getCode()) // 只查热门
         );
 
-        if (CollectionUtil.isEmpty(skinList)) {
-            log.info("⏰ [全量监控] 暂无需要监控的饰品");
+        if (hotList.isEmpty()) {
             return;
         }
 
-        log.info("⏰ [全量监控] 待扫描数量: {}", skinList.size());
+        // 扔进线程池 (代码同之前)
+        hotList.forEach(item -> executor.submit(() -> processSingleSkin(item)));
+    }
 
-        // 3. 提交任务
-        for (SkinItemEntity item : skinList) {
-            // 再次检查熔断 (防止任务队列堆积过多无效任务)
-            if (isCoolingDown) {
-                log.warn("🛑 触发熔断，停止提交后续任务");
-                break;
-            }
+    /**
+     * 🧊 冷门队列：每 2 小时执行一次 (扫 priority = 0 的)
+     */
+    @Scheduled(fixedDelay = 7200000) // 2小时
+    public void monitorColdItems() {
+        log.info("🧊 [冷门监控] 开始全量兜底扫描...");
+        List<SkinItemEntity> coldList = skinItemMapper.selectList(
+                new LambdaQueryWrapper<SkinItemEntity>()
+                        .eq(SkinItemEntity::getDelFlag, DelFlagEnum.NO.getValue())
+                        .eq(SkinItemEntity::getSkinPriority, SkinPriorityEnum.COMMON.getCode()) // 只查普通
+        );
 
-            // 异步提交给线程池 (由 ExecutorConfig 控制并发为 1)
-            executor.submit(() -> processSingleSkin(item));
+        if (coldList.isEmpty()) {
+            return;
         }
+
+        // 扔进线程池
+        coldList.forEach(item -> executor.submit(() -> processSingleSkin(item)));
     }
 
     /**

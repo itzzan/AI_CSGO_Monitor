@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS `skin_item`
     `skin_category`         VARCHAR(50)         NOT NULL DEFAULT '' COMMENT '饰品大类（Rifle, Knife, Sticker, Container）',
     `skin_weapon`           VARCHAR(100)        NOT NULL DEFAULT '' COMMENT '饰品具体类型（AK-47, Karambit, Music Kit）',
     `skin_pattern`          VARCHAR(100)        NOT NULL DEFAULT '' COMMENT '英文皮肤/图案名（Redline, Doppler, Vanilla）',
+    `skin_priority`         INT                 NOT NULL DEFAULT 0 COMMENT '饰品监控优先级：0-普通(2小时)，1-热门(5分钟)',
 
     -- 属性信息 (注意：部分物品无磨损或无稀有度，建议允许 NULL)
     `skin_exterior`         VARCHAR(50)         NOT NULL DEFAULT '' COMMENT '磨损等级（Factory New...），印花/音乐盒该字段为空',

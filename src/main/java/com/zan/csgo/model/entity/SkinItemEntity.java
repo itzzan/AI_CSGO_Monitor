@@ -63,6 +63,12 @@ public class SkinItemEntity implements Serializable {
     private String skinPattern;
 
     /**
+     * 饰品监控优先级（0-普通(2小时)，1-热门(5分钟)）
+     */
+    @TableField("skin_priority")
+    private Integer skinPriority;
+
+    /**
      * 饰品磨损等级
      */
     @TableField("skin_exterior")

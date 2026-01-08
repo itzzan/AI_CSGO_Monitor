@@ -29,7 +29,7 @@ public class TaskProducer {
     // Redis 队列 Key
     public static final String QUEUE_KEY = "csgo:task:queue";
 
-    @Scheduled(fixedDelay = 600000) // 每10分钟派发一轮
+    @Scheduled(fixedDelay = 600000) // 每60分钟派发一轮
     public void dispatchTasks() {
         log.info("📢 [调度中心] 开始派发任务...");
 

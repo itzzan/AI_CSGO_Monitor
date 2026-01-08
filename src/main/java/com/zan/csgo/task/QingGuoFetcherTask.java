@@ -29,7 +29,7 @@ public class QingGuoFetcherTask {
     private static final String REDIS_KEY = "use_proxy";
 
     /**
-     * 每 30 秒进货一次 (根据青果 IP 的有效期调整)
+     * 每 10 秒进货一次 (根据青果 IP 的有效期调整)
      * 假设青果 IP 有效期是 3~5 分钟，我们 10 秒拿一次新的补充进去
      */
     @Scheduled(fixedDelay = 10000)
