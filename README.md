@@ -158,6 +158,11 @@ npm run dev
 * [x] 实现实时涨跌幅监测各大平台
 * [x] 微信公众号消息推送（PushPlus），后续可考虑接入其余平台or机器人
 * [ ] 自动化监控各大平台
+  * [x] 接入开源代理池 Proxy Pool (Python)，持续爬取免费代理网站
+  * [x] 存储IP到Redis
+  * [x] Java Crawler: 从 Redis 随机读取 IP
+  * [x] 修改各大平台策略，获取对应的免费IP
+  * [x] 接入付费平台，获取付费代理
 
 
 * [ ] **v0.1.0 (MVP)**

@@ -1,0 +1,17 @@
+version: '3'
+services:
+  db:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  proxy_pool:
+    image: jhao104/proxy_pool:latest
+    container_name: proxy_pool
+    ports:
+      - "5010:5010"
+    depends_on:
+      - db
+    environment:
+      - DB_CONN=redis://db:6379/0

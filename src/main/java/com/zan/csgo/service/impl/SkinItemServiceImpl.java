@@ -1,16 +1,21 @@
 package com.zan.csgo.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.google.common.collect.Lists;
 import com.zan.csgo.enums.DelFlagEnum;
 import com.zan.csgo.mapper.SkinItemMapper;
 import com.zan.csgo.model.entity.SkinItemEntity;
 import com.zan.csgo.service.ISkinItemService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /**
  * @Author Zan
@@ -61,5 +66,17 @@ public class SkinItemServiceImpl extends ServiceImpl<SkinItemMapper, SkinItemEnt
         wrapper.set(ObjectUtil.isNotNull(item.getBuffGoodsId()) && item.getBuffGoodsId() > 0, SkinItemEntity::getBuffGoodsId, item.getBuffGoodsId());
         wrapper.set(ObjectUtil.isNotNull(item.getYoupinId()) && item.getYoupinId() > 0, SkinItemEntity::getYoupinId, item.getYoupinId());
         return this.update(wrapper);
+    }
+
+    @Override
+    public List<Long> selectAllIdList() {
+        LambdaQueryWrapper<SkinItemEntity> wrapper = Wrappers.<SkinItemEntity>lambdaQuery()
+                .eq(SkinItemEntity::getDelFlag, DelFlagEnum.NO.getValue())
+                .select(SkinItemEntity::getId);
+        List<SkinItemEntity> list = this.list(wrapper);
+        if (CollectionUtil.isEmpty(list)) {
+            return Lists.newArrayList();
+        }
+        return list.stream().map(SkinItemEntity::getId).toList();
     }
 }

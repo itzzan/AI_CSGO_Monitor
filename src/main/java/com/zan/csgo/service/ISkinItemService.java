@@ -3,6 +3,8 @@ package com.zan.csgo.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zan.csgo.model.entity.SkinItemEntity;
 
+import java.util.List;
+
 /**
  * @Author Zan
  * @Create 2026/1/5 18:04
@@ -14,4 +16,7 @@ public interface ISkinItemService extends IService<SkinItemEntity> {
     SkinItemEntity querySkinItemByItemId(Long skinItemId);
 
     boolean fillBuffGoodsIdAndYoupinId(SkinItemEntity item);
+
+    List<Long> selectAllIdList();
+
 }

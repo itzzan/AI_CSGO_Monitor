@@ -20,9 +20,9 @@ public class ExecutorConfig {
     public Executor monitorExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         // 核心线程数：控制并发度。建议设小一点，防止 Steam 瞬间封 IP，必须串行执行，模拟人类操作
-        executor.setCorePoolSize(1);
+        executor.setCorePoolSize(3);
         // 最大线程数
-        executor.setMaxPoolSize(1);
+        executor.setMaxPoolSize(5);
         // 队列大小，防止溢出
         executor.setQueueCapacity(2000);
         // 线程名前缀，方便查日志

@@ -11,13 +11,16 @@ import cn.hutool.json.JSONUtil;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
+import com.zan.csgo.task.ProxyProvider;
 import com.zan.csgo.utils.UserAgentUtil;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.Proxy;
 
 /**
  * @Author Zan
@@ -35,6 +38,11 @@ public class SteamStrategy implements MarketStrategy {
     @Value("${csgo.monitor.steam.search-api-url}")
     private String steamSearchApiUrl;
 
+    @Resource
+    private ProxyProvider proxyProvider;
+
+    private static final int MAX_RETRIES = 5;
+
     @Override
     public String getPlatformName() {
         return PlatformEnum.STEAM.getName();
@@ -43,101 +51,96 @@ public class SteamStrategy implements MarketStrategy {
     @Override
     public PriceFetchResultDTO fetchPrice(Object key) {
         String marketHashName = (String) key;
+        // 构造 URL
         String url = String.format(steamSearchApiUrl, HttpUtil.encodeParams(marketHashName, null));
+        long startTime = System.currentTimeMillis();
 
-        log.info(">>> 开始抓取 Steam (Render): {}", marketHashName);
+        log.info(">>> [Steam] 开始抓取: {}", marketHashName);
 
-        try {
-            HttpRequest request = HttpRequest.get(url)
-                    .header("User-Agent", UserAgentUtil.random())
-                    .header("Accept-Language", "zh-CN,zh;q=0.9")
-                    .timeout(10000);
+        int attempt = 0;
 
-            // 1. 获取完整响应对象 (不仅仅是 body)
-            try (HttpResponse response = request.execute()) {
+        while (attempt < MAX_RETRIES) {
+            attempt++;
+            Proxy proxy = proxyProvider.getRandomProxy();
+            String proxyStr = (proxy != null) ? proxy.address().toString() : "直连(无代理)";
 
-                // 2. 优先检查状态码
-                int status = response.getStatus();
-                if (status == 429) {
-                    log.warn("❌ Steam 触发 429 限流: {}", marketHashName);
-                    return PriceFetchResultDTO.fail("STEAM", "触发限流(429)");
-                }
-                if (status != 200) {
-                    log.warn("❌ Steam 返回非200状态码: {} (饰品: {})", status, marketHashName);
-                    return PriceFetchResultDTO.fail("STEAM", "HTTP状态码:" + status);
+            try {
+                HttpRequest request = HttpRequest.get(url)
+                        .header("User-Agent", UserAgentUtil.random())
+                        .header("Accept-Language", "zh-CN,zh;q=0.9")
+                        .timeout(6000); // 6秒超时
+
+                if (proxy != null) {
+                    request.setProxy(proxy);
                 }
 
-                String res = response.body();
+                try (HttpResponse response = request.execute()) {
+                    int status = response.getStatus();
 
-                // 3. 校验响应内容是否为空
-                if (StrUtil.isBlank(res)) {
-                    return PriceFetchResultDTO.fail("STEAM", "接口响应为空");
-                }
+                    // 1. 处理限流
+                    if (status == 429) {
+                        log.warn("⚠️ [Steam] 第{}次失败: 触发429限流 (Proxy: {})", attempt, proxyStr);
+                        if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                        continue;
+                    }
 
-                // 4. 🔥 核心修复：检查是否为 JSON 格式
-                // 如果 Steam 返回 HTML (比如 502 Bad Gateway 或 封禁提示)，这里会拦截
-                if (!StrUtil.startWith(res.trim(), "{")) {
-                    // 截取前100个字符打印日志，看看到底返回了什么鬼东西
-                    String preview = StrUtil.sub(res, 0, 200);
-                    log.error("❌ Steam 返回了非 JSON 内容 (可能是HTML报错): {}", preview);
-                    return PriceFetchResultDTO.fail("STEAM", "返回格式异常(非JSON)");
-                }
+                    // 2. 处理非200
+                    if (status != 200) {
+                        log.warn("⚠️ [Steam] 第{}次失败: HTTP状态码 {} (Proxy: {})", attempt, status, proxyStr);
+                        if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                        continue;
+                    }
 
-                // 5. 安全解析 JSON
-                JSONObject json = JSONUtil.parseObj(res);
+                    String res = response.body();
 
-                // 校验 success
-                if (json.getBool("success") == null || !json.getBool("success")) {
-                    return PriceFetchResultDTO.fail("STEAM", "API返回失败");
-                }
+                    // 3. 防御性编程：检查是否为 JSON
+                    if (StrUtil.isBlank(res) || !StrUtil.startWith(res.trim(), "{")) {
+                        String preview = StrUtil.sub(res, 0, 100).replace("\n", "");
+                        log.error("❌ [Steam] 返回内容非JSON (可能是HTML报错): {}... (Proxy: {})", preview, proxyStr);
+                        if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                        continue;
+                    }
 
-                // ... 后续解析逻辑保持不变 ...
-                Integer totalCount = json.getInt("total_count");
-                if (totalCount == null) totalCount = 0;
+                    // 4. 解析数据
+                    JSONObject json = JSONUtil.parseObj(res);
+                    if (json.getBool("success") != null && json.getBool("success")) {
+                        Integer totalCount = json.getInt("total_count", 0);
+                        BigDecimal price = null;
 
-                BigDecimal price = null;
-                JSONObject listingInfoMap = json.getJSONObject("listinginfo");
-
-                if (ObjectUtil.isNotNull(listingInfoMap)) {
-                    for (String listingId : listingInfoMap.keySet()) {
-                        JSONObject listing = listingInfoMap.getJSONObject(listingId);
-                        Long convertedPrice = listing.getLong("converted_price");
-                        Long convertedFee = listing.getLong("converted_fee");
-
-                        if (convertedPrice != null && convertedFee != null) {
-                            long totalPriceInCents = convertedPrice + convertedFee;
-                            price = NumberUtil.div(new BigDecimal(totalPriceInCents), new BigDecimal(100), 2, RoundingMode.HALF_UP);
+                        // 解析列表
+                        JSONObject listingInfo = json.getJSONObject("listinginfo");
+                        if (ObjectUtil.isNotNull(listingInfo)) {
+                            for (String id : listingInfo.keySet()) {
+                                JSONObject item = listingInfo.getJSONObject(id);
+                                long fee = item.getLong("converted_fee", 0L);
+                                long p = item.getLong("converted_price", 0L);
+                                // Steam价格单位是分，转为元
+                                price = NumberUtil.div(new BigDecimal(p + fee), new BigDecimal(100), 2, RoundingMode.HALF_UP);
+                                break; // 取第一个即可
+                            }
                         }
-                        break;
+
+                        if (price != null) {
+                            long cost = System.currentTimeMillis() - startTime;
+                            log.info("✅ [Steam] 抓取成功: {} -> ¥{} (耗时: {}ms)", marketHashName, price, cost);
+                            return PriceFetchResultDTO.builder()
+                                    .success(true)
+                                    .platform(getPlatformName())
+                                    .price(price)
+                                    .volume(totalCount)
+                                    .build();
+                        }
+                    } else {
+                        log.warn("⚠️ [Steam] API返回 success=false (Proxy: {})", proxyStr);
                     }
                 }
-
-                if (price == null) {
-                    return PriceFetchResultDTO.fail("STEAM", "暂无挂单");
-                }
-
-                log.info("✅ Steam抓取成功: {} -> 价格: ¥{}, 在售总数: {}", marketHashName, price, totalCount);
-
-                return PriceFetchResultDTO.builder()
-                        .success(true)
-                        .platform("STEAM")
-                        .price(price)
-                        .volume(totalCount)
-                        .targetId(null)
-                        .build();
+            } catch (Exception e) {
+                log.warn("⚠️ [Steam] 第{}次连接超时/异常: {} (Proxy: {})", attempt, e.getMessage(), proxyStr);
+                if (proxy != null) proxyProvider.removeBadProxy(proxy);
             }
-
-        } catch (cn.hutool.core.io.IORuntimeException e) {
-            // Hutool 在连接超时或 429 时可能会抛出此异常
-            if (e.getMessage() != null && e.getMessage().contains("429")) {
-                log.error("❌ Steam 触发限流 (429)");
-                return PriceFetchResultDTO.fail("STEAM", "触发限流(429)");
-            }
-            log.error("Steam 网络异常: {}", e.getMessage());
-            return PriceFetchResultDTO.fail("STEAM", "网络超时");
-        } catch (Exception e) {
-            log.error("Steam 解析异常: {}", marketHashName, e);
-            return PriceFetchResultDTO.fail("STEAM", "系统异常");
         }
+
+        log.error("❌ [Steam] {} 重试 {} 次全部失败", marketHashName, MAX_RETRIES);
+        return PriceFetchResultDTO.fail("STEAM", "重试耗尽/无可用代理");
     }
 }
