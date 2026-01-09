@@ -2,6 +2,10 @@ package com.zan.csgo.task;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpUtil;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -23,49 +27,77 @@ public class QingGuoFetcherTask {
     private StringRedisTemplate stringRedisTemplate;
 
     // 填入你在青果后台生成的 API 链接
-    private static final String API_URL = "https://share.proxy.qg.net/get?key=118B1E3B&count=3&type=1&format=txt";
+    private static final String API_URL = "https://share.proxy.qg.net/get?key=ADZ4KVSX&num=20&distinct=true";
 
     // Redis Key 保持和你 ProxyProvider 里的一致
     private static final String REDIS_KEY = "use_proxy";
 
+    @PostConstruct
+    public void init() {
+        log.info("🚀 [系统启动] 正在进行首次代理预热...");
+        fetchProxies();
+    }
+
     /**
-     * 每 10 秒进货一次 (根据青果 IP 的有效期调整)
-     * 假设青果 IP 有效期是 3~5 分钟，我们 10 秒拿一次新的补充进去
+     * 每 5 秒进货一次 (根据青果 IP 的有效期调整)
+     * 假设青果 IP 有效期是 1~5 分钟，我们 5 秒拿一次新的补充进去
      */
-    @Scheduled(fixedDelay = 10000)
+    @Scheduled(fixedDelay = 5000)
     public void fetchProxies() {
         log.info("🚚 [搬运工] 开始去青果进货...");
 
         try {
-            // 1. 调用 API 获取 IP 列表
+            // 1. 请求 API
             String result = HttpUtil.get(API_URL);
 
-            if (StrUtil.isBlank(result) || result.contains("{")) {
-                // 如果返回 JSON (如 {"code": "failed"...}) 说明出错了，比如白名单没加，或者频率太快
-                log.warn("⚠️ [搬运工] 进货失败: {}", result);
+            // 简单防空检查
+            if (StrUtil.isBlank(result)) {
                 return;
             }
 
-            // 2. 解析结果 (青果默认是换行符分隔)
-            String[] proxies = result.split("\r\n");
+            // 2. 解析 JSON
+            JSONObject json = JSONUtil.parseObj(result);
 
-            for (String proxy : proxies) {
-                if (StrUtil.isBlank(proxy)) {
-                    continue;
+            // 3. 检查状态码 (根据你提供的 JSON，成功是 "SUCCESS")
+            String code = json.getStr("code");
+            if (!"SUCCESS".equals(code)) {
+                log.warn("⚠️ [搬运工] 进货失败, 响应: {}", result);
+                return;
+            }
+
+            // 4. 提取 Data 数组
+            JSONArray data = json.getJSONArray("data");
+            if (data == null || data.isEmpty()) {
+                return;
+            }
+
+            int count = 0;
+            for (int i = 0; i < data.size(); i++) {
+                JSONObject item = data.getJSONObject(i);
+
+                // 🔥 核心：取 'server' 字段 (格式如 222.139.246.31:20085)
+                String proxyAddress = item.getStr("server");
+
+                // 取过期时间 (deadline)，存入 Redis 的 Value 中，方便以后排查
+                String deadline = item.getStr("deadline");
+
+                if (StrUtil.isNotBlank(proxyAddress)) {
+                    // 5. 存入 Redis Hash
+                    // Key: useful_proxy
+                    // Field: 222.139.246.31:20085 (作为唯一标识)
+                    // Value: 2026-01-09 09:44:30 (过期时间)
+                    stringRedisTemplate.opsForHash().put(REDIS_KEY, proxyAddress, deadline);
+                    count++;
+                    log.info("🚚 [搬运工] 进货成功: {}", proxyAddress);
                 }
+            }
 
-                // proxy 格式通常是: 123.45.67.89:8888
-                // 3. 存入 Redis
-                // 注意：这里我们换一种存法，为了方便自动过期，不用 Hash 了，改用 Set 或者直接由业务维护
-                // 但为了兼容你之前的 ProxyProvider (Hash结构)，我们这样做：
-
-                stringRedisTemplate.opsForHash().put(REDIS_KEY, proxy, System.currentTimeMillis() + "");
-
-                log.info("✨ [搬运工] 新货上架: {}", proxy);
+            if (count > 0) {
+                log.info("🚚 [搬运工] 成功进货 {} 个代理 (模式: JSON)", count);
             }
 
         } catch (Exception e) {
-            log.error("❌ [搬运工] 网络异常", e);
+            log.error("❌ [搬运工] 解析异常", e);
         }
     }
 }
