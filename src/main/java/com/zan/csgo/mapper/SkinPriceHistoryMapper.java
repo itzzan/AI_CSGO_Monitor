@@ -5,6 +5,9 @@ import com.zan.csgo.model.entity.SkinPriceHistoryEntity;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.util.Collection;
+import java.util.List;
+
 /**
  * @Author Zan
  * @Create 2026/1/6 17:39
@@ -41,4 +44,9 @@ public interface SkinPriceHistoryMapper extends BaseMapper<SkinPriceHistoryEntit
             "AND created_at <= DATE_SUB(NOW(), INTERVAL 1 MINUTE) " +
             "ORDER BY created_at DESC LIMIT 1")
     SkinPriceHistoryEntity selectPrice1MinAgo(@Param("skinId") Long skinId, @Param("platform") String platform);
+
+    /**
+     * 批量查询某平台上一轮的最新价格 (用于对比波动)
+     */
+    List<SkinPriceHistoryEntity> selectBatchLatestPrices(@Param("ids") Collection<Long> ids, @Param("platform") String platform);
 }

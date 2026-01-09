@@ -48,7 +48,7 @@ public class BuffStrategy implements MarketStrategy {
     private String buffSearchApiUrl;
 
     @Value("${csgo.monitor.buff.batch-search-api-url}")
-    private  String buffBatchSearchApiUrl;
+    private String buffBatchSearchApiUrl;
 
     @Resource
     private ProxyProviderUtil proxyProviderUtil;
@@ -111,7 +111,7 @@ public class BuffStrategy implements MarketStrategy {
             boolean isLastAttempt = (attempt == MAX_RETRIES);
 
             if (!isLastAttempt) {
-                proxy = proxyProviderUtil.getRandomProxy();
+                proxy = proxyProviderUtil.getRandomProxy(PlatformEnum.BUFF);
             } else {
                 log.warn("🔥 [Buff] 代理全挂，尝试【本机直连】兜底...");
             }
@@ -161,7 +161,7 @@ public class BuffStrategy implements MarketStrategy {
 
                         // 🚨 关键：如果是坏代理，从 Redis 移除，防止下次还用到它
                         if (proxy != null) {
-                            proxyProviderUtil.removeBadProxy(proxy);
+                            proxyProviderUtil.removeBadProxy(proxy, PlatformEnum.BUFF);
                         }
                         continue; // 换下一个 IP 重试
                     }
@@ -208,7 +208,7 @@ public class BuffStrategy implements MarketStrategy {
             } catch (Exception e) {
                 // 8. 处理网络超时
                 log.warn("⚠️ [Buff] 第{}次连接超时: {} (Proxy: {})", attempt, e.getMessage(), proxyStr);
-                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy, PlatformEnum.BUFF);
             } finally {
                 long sleep = RandomUtil.randomLong(500, 1500);
                 ThreadUtil.sleep(sleep);
@@ -238,13 +238,13 @@ public class BuffStrategy implements MarketStrategy {
         int attempt = 0;
         while (attempt < 3) { // 批量接口重试 3 次
             attempt++;
-            Proxy proxy = (proxyProviderUtil != null) ? proxyProviderUtil.getRandomProxy() : null;
+            Proxy proxy = (proxyProviderUtil != null) ? proxyProviderUtil.getRandomProxy(PlatformEnum.BUFF) : null;
             String proxyStr = (proxy != null) ? proxy.address().toString() : "直连";
 
             try {
                 // 2. 发起请求
                 HttpRequest request = HttpRequest.get(url)
-                        .header("Cookie", buffCookie)
+                        .header("Cookie", buffCookie) // BUFF必须要Cookie
                         .header("User-Agent", UserAgentUtil.random())
                         .header("Referer", "https://buff.163.com/market/")
                         .header("X-Requested-With", "XMLHttpRequest") // 必带
@@ -258,7 +258,7 @@ public class BuffStrategy implements MarketStrategy {
                     // 3. WAF / 封禁检测
                     if (StrUtil.isBlank(res) || StrUtil.trim(res).startsWith("<")) {
                         log.warn("⚠️ [Buff批量] 第{}次被墙/HTML响应 (Proxy: {})", attempt, proxyStr);
-                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy, PlatformEnum.BUFF);
                         continue;
                     }
 
@@ -298,7 +298,7 @@ public class BuffStrategy implements MarketStrategy {
                 }
             } catch (Exception e) {
                 log.warn("⚠️ [Buff批量] 网络异常: {} (Proxy: {})", e.getMessage(), proxyStr);
-                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy, PlatformEnum.BUFF);
             } finally {
                 // 批次内简单休眠
                 ThreadUtil.sleep(RandomUtil.randomInt(500, 1000));
@@ -321,7 +321,7 @@ public class BuffStrategy implements MarketStrategy {
             String url = String.format(buffSearchApiUrl, HttpUtil.encodeParams(marketHashName, null), page);
 
             // 为了保证搜索成功率，这里也简单加个重试，或者直接拿一个代理用
-            Proxy proxy = proxyProviderUtil.getRandomProxy();
+            Proxy proxy = proxyProviderUtil.getRandomProxy(PlatformEnum.BUFF);
 
             try {
                 String csrfToken = extractCsrfToken(buffCookie);
@@ -341,7 +341,7 @@ public class BuffStrategy implements MarketStrategy {
 
                 if (res != null && StrUtil.trim(res).startsWith("<")) {
                     log.warn("⚠️ [Buff Search] 搜索被拦截，跳过当前页 (Proxy: {})", proxy);
-                    if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+                    if (proxy != null) proxyProviderUtil.removeBadProxy(proxy, PlatformEnum.BUFF);
                     // 搜索阶段被拦截通常直接导致失败，这里简单处理为返回 null，让外层重试
                     return null;
                 }

@@ -28,9 +28,10 @@ public class RedisKeyConstant {
      */
     public static final String QUEUE_COLD = "csgo:task:queue:cold";
 
-    /**
-     * 代理 IP 队列 Key
-     */
-    public static final String IP_REDIS_KEY = "use_proxy";
+    // 国内代理池 (Buff, 悠悠)
+    public static final String PROXY_CN = "csgo:proxy:cn";
+
+    // 海外代理池 (Steam)
+    public static final String PROXY_GLOBAL = "csgo:proxy:global";
 
 }

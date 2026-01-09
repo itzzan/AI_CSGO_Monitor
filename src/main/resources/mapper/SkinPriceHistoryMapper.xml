@@ -25,4 +25,18 @@
         version, created_by, created_at, changed_by, changed_at, del_flag
     </sql>
 
+    <select id="selectBatchLatestPrices" resultType="com.zan.csgo.model.entity.SkinPriceHistoryEntity">
+        SELECT skin_id, price
+        FROM skin_price_history
+        WHERE id IN (
+        SELECT MAX(id)
+        FROM skin_price_history
+        WHERE skin_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND platform = #{platform}
+        GROUP BY skin_id
+        )
+    </select>
 </mapper>

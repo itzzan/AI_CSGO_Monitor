@@ -103,7 +103,7 @@ public class YoupinStrategy implements MarketStrategy {
             boolean isLastAttempt = (attempt == MAX_RETRIES);
 
             if (!isLastAttempt) {
-                proxy = proxyProviderUtil.getRandomProxy();
+                proxy = proxyProviderUtil.getRandomProxy(PlatformEnum.YOUPIN);
             } else {
                 log.warn("🔥 [Buff] 代理全挂，尝试【本机直连】兜底...");
             }
@@ -145,7 +145,7 @@ public class YoupinStrategy implements MarketStrategy {
                         log.warn("⚠️ [悠悠有品] 第{}次被拦截/返回HTML: {}... (Proxy: {})", attempt, preview, proxyStr);
 
                         // 🚨 踢出坏代理
-                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy, PlatformEnum.YOUPIN);
                         continue;
                     }
 
@@ -201,7 +201,7 @@ public class YoupinStrategy implements MarketStrategy {
                         // 此时应该换个 IP 重试，而不是直接报错
                         if (StrUtil.contains(msg, "频繁")) {
                             log.warn("⚠️ [悠悠有品] 触发频率限制 (Proxy: {})，尝试更换代理...", proxyStr);
-                            if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+                            if (proxy != null) proxyProviderUtil.removeBadProxy(proxy, PlatformEnum.YOUPIN);
                             continue;
                         }
 
@@ -212,7 +212,7 @@ public class YoupinStrategy implements MarketStrategy {
             } catch (Exception e) {
                 // 7. 处理网络超时
                 log.warn("⚠️ [悠悠有品] 第{}次连接超时: {} (Proxy: {})", attempt, e.getMessage(), proxyStr);
-                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy, PlatformEnum.YOUPIN);
             } finally {
                 long sleep = RandomUtil.randomLong(500, 1500);
                 ThreadUtil.sleep(sleep);

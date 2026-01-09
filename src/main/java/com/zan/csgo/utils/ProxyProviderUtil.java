@@ -1,9 +1,9 @@
 package com.zan.csgo.utils;
 
-import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.zan.csgo.constant.RedisKeyConstant;
+import com.zan.csgo.enums.PlatformEnum;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -11,8 +11,6 @@ import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -30,38 +28,38 @@ public class ProxyProviderUtil {
     private StringRedisTemplate stringRedisTemplate;
 
     /**
-     * 随机获取一个可用代理（从redis中）
+     * 根据平台类型获取对应区域的代理
      */
-    public Proxy getRandomProxy() {
+    public Proxy getRandomProxy(PlatformEnum platform) {
         try {
-            // 1. 从 Redis Hash 中获取所有可用代理
-            // (注意：如果代理池很大，建议用 sRandMember 或 hKeys 优化，这里演示简单逻辑)
-            Set<Object> keys = stringRedisTemplate.opsForHash().keys(RedisKeyConstant.IP_REDIS_KEY);
+            // 1. 决定使用哪个代理池
+            String redisKey;
+            if (PlatformEnum.STEAM.equals(platform)) {
+                redisKey = RedisKeyConstant.PROXY_GLOBAL; // Steam -> 海外池
+            } else if (PlatformEnum.BUFF.equals(platform) || PlatformEnum.YOUPIN.equals(platform)) {
+                redisKey = RedisKeyConstant.PROXY_CN;     // Buff/悠悠 -> 国内池
+            } else {
+                redisKey = RedisKeyConstant.PROXY_CN;     // 默认，C5GAME/IGXE -> 国内池
+            }
 
-            if (CollectionUtil.isEmpty(keys)) {
-                log.warn("⚠️ [代理池] Redis 中没有可用代理！正在裸奔...");
+            // 2. 从 Redis 获取所有代理
+            Set<Object> keys = stringRedisTemplate.opsForHash().keys(redisKey);
+            if (keys.isEmpty()) {
+                // 如果海外池没货，且是本地开发环境，可以返回 null 让它尝试直连 (走本地梯子)
+                log.warn("⚠️ [{}] 代理池为空", platform.getName());
                 return null;
             }
 
-            // 2. 随机取一个 (负载均衡)
-            List<Object> proxyList = new ArrayList<>(keys);
-            String proxyStr = (String) RandomUtil.randomEle(proxyList); // 格式如 "127.0.0.1:8080"
+            // 3. 随机取一个
+            int index = RandomUtil.randomInt(keys.size());
+            String proxyStr = (String) keys.toArray()[index];
 
             if (StrUtil.isBlank(proxyStr)) {
                 return null;
             }
 
-            // 3. 解析 IP 和 Port
             String[] parts = proxyStr.split(":");
-            if (parts.length != 2) {
-                return null;
-            }
-
-            String ip = parts[0];
-            int port = Integer.parseInt(parts[1]);
-
-            // 4. 构建 Java Proxy 对象
-            return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(ip, port));
+            return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(parts[0], Integer.parseInt(parts[1])));
 
         } catch (Exception e) {
             log.error("获取代理异常", e);
@@ -70,18 +68,19 @@ public class ProxyProviderUtil {
     }
 
     /**
-     * 如果某个代理不可用，把它从 Redis 删掉
-     * 防止其他线程又拿到了坏代理
+     * 移除失效代理 (需要判断是哪个池子的)
      */
-    public void removeBadProxy(Proxy proxy) {
-        if (proxy == null || proxy.address() == null) {
-            return;
-        }
+    public void removeBadProxy(Proxy proxy, PlatformEnum platform) {
+        if (proxy == null) return;
         try {
-            InetSocketAddress address = (InetSocketAddress) proxy.address();
-            String key = address.getHostString() + ":" + address.getPort();
-            stringRedisTemplate.opsForHash().delete(RedisKeyConstant.IP_REDIS_KEY, key);
-            log.warn("🗑️ [代理池] 移除失效代理: {}", key);
+            String address = proxy.address().toString();
+            if (address.startsWith("/")) address = address.substring(1);
+
+            String redisKey = PlatformEnum.STEAM.equals(platform) ?
+                    RedisKeyConstant.PROXY_GLOBAL : RedisKeyConstant.PROXY_CN;
+
+            stringRedisTemplate.opsForHash().delete(redisKey, address);
+            log.warn("🗑️ [代理池] 移除 {} 失效代理: {}", platform.getName(), address);
         } catch (Exception e) {
             // ignore
         }
