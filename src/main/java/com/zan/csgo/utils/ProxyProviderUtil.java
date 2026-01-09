@@ -1,4 +1,4 @@
-package com.zan.csgo.task;
+package com.zan.csgo.utils;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.RandomUtil;
@@ -18,12 +18,12 @@ import java.util.Set;
  * @Author Zan
  * @Create 2026/1/8 10:00
  * @ClassName: ProxyProvider
- * @Description : 免费代理池提供者
+ * @Description : 代理池提供者
  *                对接 Redis 中的 use_proxy 键
  */
 @Component
 @Slf4j
-public class ProxyProvider {
+public class ProxyProviderUtil {
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -32,7 +32,7 @@ public class ProxyProvider {
     private static final String REDIS_KEY = "use_proxy";
 
     /**
-     * 随机获取一个可用代理
+     * 随机获取一个可用代理（从redis中）
      */
     public Proxy getRandomProxy() {
         try {

@@ -17,6 +17,8 @@ public enum SkinPriorityEnum {
 
     HOT(1, "热门"),
 
+    ICE(2, "冷门"),
+
     ;
 
     private final Integer code;

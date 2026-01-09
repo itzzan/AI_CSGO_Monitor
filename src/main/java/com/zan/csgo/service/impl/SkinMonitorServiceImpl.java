@@ -168,7 +168,6 @@ public class SkinMonitorServiceImpl implements ISkinMonitorService {
 
         // 1. 查数据库获取基准价格
         SkinPriceHistoryEntity history24h = priceHistoryMapper.selectPrice1MinAgo(item.getId(), platform);
-        SkinPriceHistoryEntity historyLast = priceHistoryMapper.selectLatestPrice(item.getId(), platform);
 
         String changeRateStr = "-";
         String changeTag = "";

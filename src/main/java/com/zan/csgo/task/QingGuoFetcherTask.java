@@ -27,7 +27,7 @@ public class QingGuoFetcherTask {
     private StringRedisTemplate stringRedisTemplate;
 
     // 填入你在青果后台生成的 API 链接
-    private static final String API_URL = "https://share.proxy.qg.net/get?key=ADZ4KVSX&num=20&distinct=true";
+    private static final String API_URL = "https://share.proxy.qg.net/get?key=ADZ4KVSX&num=5&distinct=true";
 
     // Redis Key 保持和你 ProxyProvider 里的一致
     private static final String REDIS_KEY = "use_proxy";
@@ -39,10 +39,10 @@ public class QingGuoFetcherTask {
     }
 
     /**
-     * 每 5 秒进货一次 (根据青果 IP 的有效期调整)
-     * 假设青果 IP 有效期是 1~5 分钟，我们 5 秒拿一次新的补充进去
+     * 每 60 秒进货一次 (根据青果 IP 的有效期调整)
+     * 假设青果 IP 有效期是 1~5 分钟，我们 60 秒拿一次新的补充进去
      */
-    @Scheduled(fixedDelay = 5000)
+    @Scheduled(fixedDelay = 60000)
     public void fetchProxies() {
         log.info("🚚 [搬运工] 开始去青果进货...");
 
