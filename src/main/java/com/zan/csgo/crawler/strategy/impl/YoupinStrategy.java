@@ -1,5 +1,6 @@
 package com.zan.csgo.crawler.strategy.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
@@ -10,9 +11,9 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
+import com.zan.csgo.exception.BusinessException;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
-import com.zan.csgo.task.ProxyProvider;
-import com.zan.csgo.utils.UserAgentUtil;
+import com.zan.csgo.utils.ProxyProviderUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,8 +21,10 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.net.Proxy;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * @Author Zan
@@ -49,9 +52,12 @@ public class YoupinStrategy implements MarketStrategy {
     private String YouPinAppVersion;
 
     @Resource
-    private ProxyProvider proxyProvider;
+    private ProxyProviderUtil proxyProviderUtil;
 
     private static final int MAX_RETRIES = 5;
+
+    // 专用线程池，用于并发请求悠悠，避免阻塞主调度器
+    private final ExecutorService youpinExecutor = Executors.newFixedThreadPool(10);
 
     @Override
     public String getPlatformName() {
@@ -97,7 +103,7 @@ public class YoupinStrategy implements MarketStrategy {
             boolean isLastAttempt = (attempt == MAX_RETRIES);
 
             if (!isLastAttempt) {
-                proxy = proxyProvider.getRandomProxy();
+                proxy = proxyProviderUtil.getRandomProxy();
             } else {
                 log.warn("🔥 [Buff] 代理全挂，尝试【本机直连】兜底...");
             }
@@ -116,7 +122,7 @@ public class YoupinStrategy implements MarketStrategy {
                         .header("platform", "pc")
                         .header("appType", "1")
                         // --- 浏览器伪装 ---
-                        .header("User-Agent", UserAgentUtil.random()) // 随机 UA
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36") // 随机 UA
                         .header("Origin", "https://youpin898.com")
                         .header("Referer", "https://youpin898.com/")
                         .header("Content-Type", "application/json")
@@ -139,7 +145,7 @@ public class YoupinStrategy implements MarketStrategy {
                         log.warn("⚠️ [悠悠有品] 第{}次被拦截/返回HTML: {}... (Proxy: {})", attempt, preview, proxyStr);
 
                         // 🚨 踢出坏代理
-                        if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
                         continue;
                     }
 
@@ -195,7 +201,7 @@ public class YoupinStrategy implements MarketStrategy {
                         // 此时应该换个 IP 重试，而不是直接报错
                         if (StrUtil.contains(msg, "频繁")) {
                             log.warn("⚠️ [悠悠有品] 触发频率限制 (Proxy: {})，尝试更换代理...", proxyStr);
-                            if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                            if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
                             continue;
                         }
 
@@ -206,7 +212,7 @@ public class YoupinStrategy implements MarketStrategy {
             } catch (Exception e) {
                 // 7. 处理网络超时
                 log.warn("⚠️ [悠悠有品] 第{}次连接超时: {} (Proxy: {})", attempt, e.getMessage(), proxyStr);
-                if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
             } finally {
                 long sleep = RandomUtil.randomLong(500, 1500);
                 ThreadUtil.sleep(sleep);
@@ -215,5 +221,45 @@ public class YoupinStrategy implements MarketStrategy {
 
         log.error("❌ [悠悠有品] ID:{} 重试 {} 次全部失败", templateId, MAX_RETRIES);
         return PriceFetchResultDTO.fail(getPlatformName(), "重试耗尽/无可用代理");
+    }
+
+    /**
+     * 🔥 核心：并发模拟批量
+     * 同时发起 N 个 HTTP 请求，等待全部完成后聚合结果
+     */
+    @Override
+    public List<PriceFetchResultDTO> batchFetchPrices(List<String> ids) {
+        // 线程安全的 List 用于收集结果
+        List<PriceFetchResultDTO> results = Collections.synchronizedList(new ArrayList<>());
+        if (CollectionUtil.isEmpty(ids)) {
+            return results;
+        }
+
+        long start = System.currentTimeMillis();
+
+        // 1. 创建并发任务
+        List<CompletableFuture<Void>> futures = ids.stream()
+                .map(id -> CompletableFuture.runAsync(() -> {
+                    PriceFetchResultDTO dto = fetchPrice(Long.valueOf(id));
+                    if (dto != null) {
+                        results.add(dto);
+                    }
+                }, youpinExecutor))
+                .toList();
+
+        // 2. 等待所有任务完成 (join 会阻塞直到所有子线程结束)
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } catch (Exception e) {
+            log.error("⚠️ [悠悠] 并发任务执行异常", e);
+        }
+
+        // 如果传入了 ID，但结果是空的，很有可能是所有请求都超时了
+        if (CollectionUtil.isNotEmpty(ids) && CollectionUtil.isEmpty(results)) {
+            throw new BusinessException("悠悠 批量并发全部失败，触发补偿机制");
+        }
+
+        log.info("📦 [悠悠并发] 请求 {} 个ID，成功 {} 个，耗时 {}ms", ids.size(), results.size(), System.currentTimeMillis() - start);
+        return results;
     }
 }

@@ -11,7 +11,7 @@ public class RedisKeyConstant {
     /**
      * 所有饰品队列 Key
      */
-    public static final String QUEUE_KEY = "csgo:task:queue";
+    public static final String QUEUE_KEY = "csgo:task:queue:default";
 
     /**
      * 普通饰品队列 Key
@@ -27,4 +27,10 @@ public class RedisKeyConstant {
      * 冷门饰品队列 Key
      */
     public static final String QUEUE_COLD = "csgo:task:queue:cold";
+
+    /**
+     * 代理 IP 队列 Key
+     */
+    public static final String IP_REDIS_KEY = "use_proxy";
+
 }

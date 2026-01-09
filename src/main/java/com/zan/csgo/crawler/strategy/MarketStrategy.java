@@ -2,6 +2,8 @@ package com.zan.csgo.crawler.strategy;
 
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
 
+import java.util.List;
+
 /**
  * @Author Zan
  * @Create 2026/1/7 09:38
@@ -11,14 +13,23 @@ import com.zan.csgo.model.dto.PriceFetchResultDTO;
 public interface MarketStrategy {
 
     /**
+     * 获取平台名称 (用于日志)
+     */
+    String getPlatformName();
+
+    /**
      * 获取价格
+     *
      * @param key 关键参数 (Steam、Buff传HashName)
      * @return 统一结果对象
      */
     PriceFetchResultDTO fetchPrice(Object key);
 
     /**
-     * 获取平台名称 (用于日志)
+     * 批量获取价格
+     *
+     * @param ids 平台对应的商品ID列表 (String类型，兼容长整型和字符串)
+     * @return 抓取成功的价格列表
      */
-    String getPlatformName();
+    List<PriceFetchResultDTO> batchFetchPrices(List<String> ids);
 }

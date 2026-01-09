@@ -79,4 +79,20 @@ public class SkinItemServiceImpl extends ServiceImpl<SkinItemMapper, SkinItemEnt
         }
         return list.stream().map(SkinItemEntity::getId).toList();
     }
+
+    @Override
+    public List<Long> selectAllIdListByPriority(Integer skinPriority) {
+        if (ObjectUtil.isNull(skinPriority)) {
+            return Lists.newArrayList();
+        }
+        LambdaQueryWrapper<SkinItemEntity> wrapper = Wrappers.<SkinItemEntity>lambdaQuery()
+                .eq(SkinItemEntity::getDelFlag, DelFlagEnum.NO.getValue())
+                .eq(SkinItemEntity::getSkinPriority, skinPriority)
+                .select(SkinItemEntity::getId);
+        List<SkinItemEntity> list = this.list(wrapper);
+        if (CollectionUtil.isEmpty(list)) {
+            return Lists.newArrayList();
+        }
+        return list.stream().map(SkinItemEntity::getId).toList();
+    }
 }

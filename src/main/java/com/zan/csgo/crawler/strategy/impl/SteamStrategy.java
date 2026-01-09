@@ -11,7 +11,7 @@ import cn.hutool.json.JSONUtil;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
-import com.zan.csgo.task.ProxyProvider;
+import com.zan.csgo.utils.ProxyProviderUtil;
 import com.zan.csgo.utils.UserAgentUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.Proxy;
+import java.util.List;
 
 /**
  * @Author Zan
@@ -39,7 +40,7 @@ public class SteamStrategy implements MarketStrategy {
     private String steamSearchApiUrl;
 
     @Resource
-    private ProxyProvider proxyProvider;
+    private ProxyProviderUtil proxyProviderUtil;
 
     private static final int MAX_RETRIES = 5;
 
@@ -61,7 +62,7 @@ public class SteamStrategy implements MarketStrategy {
 
         while (attempt < MAX_RETRIES) {
             attempt++;
-            Proxy proxy = proxyProvider.getRandomProxy();
+            Proxy proxy = proxyProviderUtil.getRandomProxy();
             String proxyStr = (proxy != null) ? proxy.address().toString() : "直连(无代理)";
 
             try {
@@ -80,14 +81,14 @@ public class SteamStrategy implements MarketStrategy {
                     // 1. 处理限流
                     if (status == 429) {
                         log.warn("⚠️ [Steam] 第{}次失败: 触发429限流 (Proxy: {})", attempt, proxyStr);
-                        if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
                         continue;
                     }
 
                     // 2. 处理非200
                     if (status != 200) {
                         log.warn("⚠️ [Steam] 第{}次失败: HTTP状态码 {} (Proxy: {})", attempt, status, proxyStr);
-                        if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
                         continue;
                     }
 
@@ -97,7 +98,7 @@ public class SteamStrategy implements MarketStrategy {
                     if (StrUtil.isBlank(res) || !StrUtil.startWith(res.trim(), "{")) {
                         String preview = StrUtil.sub(res, 0, 100).replace("\n", "");
                         log.error("❌ [Steam] 返回内容非JSON (可能是HTML报错): {}... (Proxy: {})", preview, proxyStr);
-                        if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
                         continue;
                     }
 
@@ -136,11 +137,16 @@ public class SteamStrategy implements MarketStrategy {
                 }
             } catch (Exception e) {
                 log.warn("⚠️ [Steam] 第{}次连接超时/异常: {} (Proxy: {})", attempt, e.getMessage(), proxyStr);
-                if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
             }
         }
 
         log.error("❌ [Steam] {} 重试 {} 次全部失败", marketHashName, MAX_RETRIES);
         return PriceFetchResultDTO.fail("STEAM", "重试耗尽/无可用代理");
+    }
+
+    @Override
+    public List<PriceFetchResultDTO> batchFetchPrices(List<String> ids) {
+        return List.of();
     }
 }

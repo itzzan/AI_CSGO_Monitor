@@ -5,9 +5,11 @@ import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.zan.csgo.constant.RedisKeyConstant;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -26,11 +28,14 @@ public class QingGuoFetcherTask {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
-    // 填入你在青果后台生成的 API 链接
-    private static final String API_URL = "https://share.proxy.qg.net/get?key=ADZ4KVSX&num=5&distinct=true";
+    @Value("${csgo.qingguo.api-url}")
+    private String qingGuoApiUrl;
 
-    // Redis Key 保持和你 ProxyProvider 里的一致
-    private static final String REDIS_KEY = "use_proxy";
+    @Value("${csgo.qingguo.auth-key}")
+    private String qingGuoAuthKey;
+
+    @Value("${csgo.qingguo.auth-pwd}")
+    private String qingGuoAuthPwd;
 
     @PostConstruct
     public void init() {
@@ -47,8 +52,10 @@ public class QingGuoFetcherTask {
         log.info("🚚 [搬运工] 开始去青果进货...");
 
         try {
+            String apiUrl = String.format(qingGuoApiUrl, 5, qingGuoAuthKey, qingGuoAuthPwd);
+
             // 1. 请求 API
-            String result = HttpUtil.get(API_URL);
+            String result = HttpUtil.get(apiUrl);
 
             // 简单防空检查
             if (StrUtil.isBlank(result)) {
@@ -86,7 +93,7 @@ public class QingGuoFetcherTask {
                     // Key: useful_proxy
                     // Field: 222.139.246.31:20085 (作为唯一标识)
                     // Value: 2026-01-09 09:44:30 (过期时间)
-                    stringRedisTemplate.opsForHash().put(REDIS_KEY, proxyAddress, deadline);
+                    stringRedisTemplate.opsForHash().put(RedisKeyConstant.IP_REDIS_KEY, proxyAddress, deadline);
                     count++;
                     log.info("🚚 [搬运工] 进货成功: {}", proxyAddress);
                 }

@@ -1,5 +1,6 @@
 package com.zan.csgo.crawler.strategy.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.RandomUtil;
@@ -13,8 +14,9 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.zan.csgo.crawler.strategy.MarketStrategy;
 import com.zan.csgo.enums.PlatformEnum;
+import com.zan.csgo.exception.BusinessException;
 import com.zan.csgo.model.dto.PriceFetchResultDTO;
-import com.zan.csgo.task.ProxyProvider;
+import com.zan.csgo.utils.ProxyProviderUtil;
 import com.zan.csgo.utils.UserAgentUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.net.Proxy;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @Author Zan
@@ -43,8 +47,11 @@ public class BuffStrategy implements MarketStrategy {
     @Value("${csgo.monitor.buff.search-api-url}")
     private String buffSearchApiUrl;
 
+    @Value("${csgo.monitor.buff.batch-search-api-url}")
+    private  String buffBatchSearchApiUrl;
+
     @Resource
-    private ProxyProvider proxyProvider;
+    private ProxyProviderUtil proxyProviderUtil;
 
     private static final int MAX_RETRIES = 5;
 
@@ -104,7 +111,7 @@ public class BuffStrategy implements MarketStrategy {
             boolean isLastAttempt = (attempt == MAX_RETRIES);
 
             if (!isLastAttempt) {
-                proxy = proxyProvider.getRandomProxy();
+                proxy = proxyProviderUtil.getRandomProxy();
             } else {
                 log.warn("🔥 [Buff] 代理全挂，尝试【本机直连】兜底...");
             }
@@ -154,7 +161,7 @@ public class BuffStrategy implements MarketStrategy {
 
                         // 🚨 关键：如果是坏代理，从 Redis 移除，防止下次还用到它
                         if (proxy != null) {
-                            proxyProvider.removeBadProxy(proxy);
+                            proxyProviderUtil.removeBadProxy(proxy);
                         }
                         continue; // 换下一个 IP 重试
                     }
@@ -201,7 +208,7 @@ public class BuffStrategy implements MarketStrategy {
             } catch (Exception e) {
                 // 8. 处理网络超时
                 log.warn("⚠️ [Buff] 第{}次连接超时: {} (Proxy: {})", attempt, e.getMessage(), proxyStr);
-                if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
             } finally {
                 long sleep = RandomUtil.randomLong(500, 1500);
                 ThreadUtil.sleep(sleep);
@@ -210,6 +217,96 @@ public class BuffStrategy implements MarketStrategy {
 
         log.error("❌ [Buff] ID:{} 重试 {} 次后全部失败", goodsId, MAX_RETRIES);
         return PriceFetchResultDTO.fail("BUFF", "重试耗尽/无可用代理");
+    }
+
+    /**
+     * 🔥 Buff 批量抓取实现
+     * 利用 goods_ids 参数一次查多个
+     */
+    @Override
+    public List<PriceFetchResultDTO> batchFetchPrices(List<String> ids) {
+        log.info("🔥 Buff 批量抓取开始 ids:{}", ids);
+        List<PriceFetchResultDTO> results = new ArrayList<>();
+        if (CollectionUtil.isEmpty(ids)) {
+            return results;
+        }
+
+        // 1. 关键：手动拼接参数，防止逗号被 Hutool 转义为 %2C，导致 Buff 无法识别
+        String idsParam = String.join(",", ids);
+        String url = String.format(buffBatchSearchApiUrl, idsParam);
+
+        int attempt = 0;
+        while (attempt < 3) { // 批量接口重试 3 次
+            attempt++;
+            Proxy proxy = (proxyProviderUtil != null) ? proxyProviderUtil.getRandomProxy() : null;
+            String proxyStr = (proxy != null) ? proxy.address().toString() : "直连";
+
+            try {
+                // 2. 发起请求
+                HttpRequest request = HttpRequest.get(url)
+                        .header("Cookie", buffCookie)
+                        .header("User-Agent", UserAgentUtil.random())
+                        .header("Referer", "https://buff.163.com/market/")
+                        .header("X-Requested-With", "XMLHttpRequest") // 必带
+                        .timeout(8000);
+
+                if (proxy != null) request.setProxy(proxy);
+
+                try (HttpResponse response = request.execute()) {
+                    String res = response.body();
+
+                    // 3. WAF / 封禁检测
+                    if (StrUtil.isBlank(res) || StrUtil.trim(res).startsWith("<")) {
+                        log.warn("⚠️ [Buff批量] 第{}次被墙/HTML响应 (Proxy: {})", attempt, proxyStr);
+                        if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+                        continue;
+                    }
+
+                    // 4. 解析 JSON
+                    JSONObject json = JSONUtil.parseObj(res);
+                    String code = json.getStr("code");
+
+                    if ("OK".equals(code)) {
+                        JSONArray items = json.getJSONObject("data").getJSONArray("items");
+                        if (items != null) {
+                            for (int i = 0; i < items.size(); i++) {
+                                JSONObject item = items.getJSONObject(i);
+                                // 注意：列表页最低价字段是 sell_min_price
+                                BigDecimal price = item.getBigDecimal("sell_min_price");
+                                String id = item.getStr("id");
+
+                                if (price != null) {
+                                    results.add(PriceFetchResultDTO.builder()
+                                            .success(true)
+                                            .platform(PlatformEnum.BUFF.getName())
+                                            .targetId(id)
+                                            .price(price)
+                                            .build());
+                                }
+                            }
+                        }
+                        log.info("📦 [Buff批量] 成功抓取 {}/{} 个 (Proxy: {})", results.size(), ids.size(), proxyStr);
+                        return results; // 成功即返回
+                    } else {
+                        String error = json.getStr("error");
+                        if ("Login Required".equals(error)) {
+                            log.error("⛔ [Buff] Cookie 已失效，请更新！");
+                            return results; // Cookie 死了，重试无意义
+                        }
+                        log.warn("⚠️ [Buff批量] API业务错误: {}", error);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ [Buff批量] 网络异常: {} (Proxy: {})", e.getMessage(), proxyStr);
+                if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
+            } finally {
+                // 批次内简单休眠
+                ThreadUtil.sleep(RandomUtil.randomInt(500, 1000));
+            }
+        }
+        // 如果代码走到这里，说明 3 次循环都跑完了，还是没 return，说明全挂了。
+        // 抛出异常，通知上层工人回滚数据！
+        throw new BusinessException("Buff 3次代理重试全部失败，触发补偿机制");
     }
 
     /**
@@ -224,7 +321,7 @@ public class BuffStrategy implements MarketStrategy {
             String url = String.format(buffSearchApiUrl, HttpUtil.encodeParams(marketHashName, null), page);
 
             // 为了保证搜索成功率，这里也简单加个重试，或者直接拿一个代理用
-            Proxy proxy = proxyProvider.getRandomProxy();
+            Proxy proxy = proxyProviderUtil.getRandomProxy();
 
             try {
                 String csrfToken = extractCsrfToken(buffCookie);
@@ -244,7 +341,7 @@ public class BuffStrategy implements MarketStrategy {
 
                 if (res != null && StrUtil.trim(res).startsWith("<")) {
                     log.warn("⚠️ [Buff Search] 搜索被拦截，跳过当前页 (Proxy: {})", proxy);
-                    if (proxy != null) proxyProvider.removeBadProxy(proxy);
+                    if (proxy != null) proxyProviderUtil.removeBadProxy(proxy);
                     // 搜索阶段被拦截通常直接导致失败，这里简单处理为返回 null，让外层重试
                     return null;
                 }

@@ -19,4 +19,5 @@ public interface ISkinItemService extends IService<SkinItemEntity> {
 
     List<Long> selectAllIdList();
 
+    List<Long> selectAllIdListByPriority(Integer priority);
 }
