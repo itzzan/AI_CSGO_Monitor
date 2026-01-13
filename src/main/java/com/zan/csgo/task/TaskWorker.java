@@ -8,6 +8,7 @@ import com.google.common.collect.Lists;
 import com.zan.csgo.constant.RedisKeyConstant;
 import com.zan.csgo.crawler.strategy.impl.BuffStrategy;
 import com.zan.csgo.crawler.strategy.impl.SteamStrategy;
+import com.zan.csgo.crawler.strategy.impl.YoupinStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.enums.SkinPriorityEnum;
 import com.zan.csgo.exception.BusinessException;
