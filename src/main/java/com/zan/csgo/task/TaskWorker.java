@@ -8,7 +8,6 @@ import com.google.common.collect.Lists;
 import com.zan.csgo.constant.RedisKeyConstant;
 import com.zan.csgo.crawler.strategy.impl.BuffStrategy;
 import com.zan.csgo.crawler.strategy.impl.SteamStrategy;
-import com.zan.csgo.crawler.strategy.impl.YoupinStrategy;
 import com.zan.csgo.enums.PlatformEnum;
 import com.zan.csgo.enums.SkinPriorityEnum;
 import com.zan.csgo.exception.BusinessException;
@@ -24,7 +23,6 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -41,7 +39,7 @@ import java.util.stream.Collectors;
  * @ClassName: TaskWorker
  * @Description : 分布式批量工人 (优先级队列 + 批量消费 + 自动映射入库)
  */
-@Component
+//@Component
 @Slf4j
 public class TaskWorker {
 
@@ -160,7 +158,6 @@ public class TaskWorker {
                 .filter(id -> id != null && id > 0)
                 .map(String::valueOf)
                 .collect(Collectors.toList());
-        youpinIds = Lists.newArrayList();
 
 
         // 3. 提取 Steam Name 列表

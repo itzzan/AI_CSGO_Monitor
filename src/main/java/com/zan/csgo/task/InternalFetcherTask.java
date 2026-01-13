@@ -47,12 +47,12 @@ public class InternalFetcherTask {
      * 每 60 秒进货一次 (根据青果 IP 的有效期调整)
      * 假设青果 IP 有效期是 1~5 分钟，我们 60 秒拿一次新的补充进去
      */
-    @Scheduled(fixedDelay = 1000 * 60)
+//    @Scheduled(fixedDelay = 1000 * 60)
     public void fetchProxies() {
         log.info("🚚 [国内搬运工] 开始去青果进货...");
 
         try {
-            String apiUrl = String.format(qingGuoApiUrl, 5, qingGuoAuthKey, qingGuoAuthPwd);
+            String apiUrl = String.format(qingGuoApiUrl, 10, qingGuoAuthKey, qingGuoAuthPwd);
 
             // 1. 请求 API
             String result = HttpUtil.get(apiUrl);

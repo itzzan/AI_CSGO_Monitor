@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * @ClassName: GlobalProxyFetcherTask
  * @Description : 海外代理搬运工 (专门给 Steam or 其他国外平台 用)
  */
-@Component
+//@Component
 @Slf4j
 public class GlobalProxyFetcherTask {
 
